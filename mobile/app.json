@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "RSG Guard Terminal",
+    "slug": "rsg-guard-terminal",
+    "version": "1.0.0",
+    "sdkVersion": "58.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#333333",
+    "primaryColor": "#eb0505",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera permission is required to scan patrol QR checkpoints.",
+        "NSLocationWhenInUseUsageDescription": "Location permission is required to verify geofence boundaries for shift attendance.",
+        "NSFaceIDUsageDescription": "Allow RSG Guard Terminal to use Face ID for fast biometric sign-in."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#333333"
+      },
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Camera permission is required to scan patrol QR checkpoints."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Location permission is required to verify geofence boundaries for shift attendance."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow RSG Guard Terminal to use Face ID for fast biometric sign-in."
+        }
+      ],
+      "expo-status-bar"
+    ]
+  }
+}

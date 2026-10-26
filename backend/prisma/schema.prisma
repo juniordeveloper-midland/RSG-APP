@@ -1,0 +1,284 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  employee
+  manager
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum CheckType {
+  gps
+  qr
+  face
+  manual
+}
+
+enum AlertStatus {
+  open
+  acknowledged
+  resolved
+}
+
+model Branch {
+  id               String            @id @default(uuid())
+  name             String
+  address          String?
+  lat              Decimal           @db.Decimal(10, 8)
+  lng              Decimal           @db.Decimal(11, 8)
+  radius_m         Float             @default(100)
+  is_active        Boolean           @default(true)
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+
+  users            User[]
+  shifts           Shift[]
+  patrol_qrs       PatrolQr[]
+  alerts           Alert[]
+
+  @@map("branches")
+}
+
+model User {
+  id                   String            @id @default(uuid())
+  branch_id            String?
+  name                 String
+  email                String            @unique
+  username             String?           @unique
+  phone                String?
+  address              String?
+  photo_url            String?
+  password_hash        String
+  role                 Role              @default(employee)
+  status               UserStatus        @default(active)
+  hourly_rate          Decimal?          @db.Decimal(10, 2)
+  monthly_hours        Float?
+  id_number            String?
+  restrict_early_start Boolean           @default(false)
+  auto_checkout        Boolean           @default(false)
+  managerial_access    Boolean           @default(false)
+  created_at           DateTime          @default(now())
+  updated_at           DateTime          @updatedAt
+
+  branch               Branch?           @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  shift_assignments    ShiftAssignment[]
+  attendance_records   Attendance[]
+  patrol_scans         PatrolScan[]
+  alerts               Alert[]
+  audit_logs           AuditLog[]
+  refresh_tokens       RefreshToken[]
+  password_resets      PasswordReset[]
+  notifications        Notification[]
+
+  @@index([branch_id])
+  @@index([role, status])
+  @@map("users")
+}
+
+model Shift {
+  id                      String            @id @default(uuid())
+  branch_id               String
+  name                    String
+  start_time              String            // e.g., "08:00"
+  end_time                String            // e.g., "16:00"
+  check_type              CheckType         @default(gps)
+  overtime_enabled        Boolean           @default(false)
+  overtime_limit_hours    Int               @default(0) // Range 1-50 if enabled
+  lunch_deduction_minutes Int               @default(0)
+  is_active               Boolean           @default(true)
+  created_at              DateTime          @default(now())
+  updated_at              DateTime          @updatedAt
+
+  branch                  Branch            @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  shift_assignments       ShiftAssignment[]
+  attendance_records      Attendance[]
+
+  @@index([branch_id])
+  @@map("shifts")
+}
+
+model ShiftAssignment {
+  id             String    @id @default(uuid())
+  shift_id       String
+  user_id        String
+  start_date     DateTime
+  end_date       DateTime?
+  excluded_dates Json?     // JSON array of excluded dates: string[]
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  shift          Shift     @relation(fields: [shift_id], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, shift_id])
+  @@map("shift_assignments")
+}
+
+model Attendance {
+  id               String    @id @default(uuid())
+  user_id          String
+  shift_id         String?
+  check_in_at      DateTime?
+  check_out_at     DateTime?
+  in_lat           Decimal?  @db.Decimal(10, 8)
+  in_lng           Decimal?  @db.Decimal(11, 8)
+  out_lat          Decimal?  @db.Decimal(10, 8)
+  out_lng          Decimal?  @db.Decimal(11, 8)
+  accuracy_m       Float?
+  method           String    // gps, qr, face, manual
+  status           String    // present, late, absent, half_day, checked_in
+  request_id          String    @unique
+  checkout_request_id String?   @unique
+  device_time         DateTime
+  server_time      DateTime  @default(now())
+  system_generated Boolean   @default(false)
+  sync_status      String    @default("synced")
+  hours_worked     Decimal?  @db.Decimal(5, 2)
+  overtime_hours   Decimal?  @db.Decimal(5, 2)
+  lunch_deduction  Int       @default(0)
+  notes            String?   @db.Text
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  user             User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  shift            Shift?    @relation(fields: [shift_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, check_in_at])
+  @@index([status])
+  @@map("attendance")
+}
+
+model PatrolQr {
+  id               String       @id @default(uuid())
+  branch_id        String
+  name             String
+  description      String?
+  signed_token     String       @db.Text
+  start_date       DateTime?
+  end_date         DateTime?
+  interval_minutes Int?         @default(60)
+  last_scanned_at  DateTime?
+  is_active        Boolean      @default(true)
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  branch           Branch       @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  scans            PatrolScan[]
+
+  @@index([branch_id])
+  @@index([is_active])
+  @@map("patrol_qrs")
+}
+
+model PatrolScan {
+  id             String    @id @default(uuid())
+  qr_id          String
+  user_id        String
+  device_time    DateTime
+  server_time    DateTime  @default(now())
+  lat            Decimal?  @db.Decimal(10, 8)
+  lng            Decimal?  @db.Decimal(11, 8)
+  accuracy_m     Float?
+  is_anomaly     Boolean   @default(false)
+  anomaly_reason String?
+  request_id     String    @unique
+  created_at     DateTime  @default(now())
+
+  qr             PatrolQr  @relation(fields: [qr_id], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([qr_id, server_time])
+  @@index([user_id, server_time])
+  @@index([is_anomaly])
+  @@map("patrol_scans")
+}
+
+model Alert {
+  id         String      @id @default(uuid())
+  branch_id  String?
+  owner_id   String?
+  type       String      // geofence_breach, missed_patrol, panic, system
+  severity   String      // low, medium, high, critical
+  status     AlertStatus @default(open)
+  message    String      @db.Text
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+
+  branch     Branch?     @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  owner      User?       @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+
+  @@index([status, branch_id])
+  @@map("alerts")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  user_id    String?
+  action     String   // e.g., "USER_LOGIN", "SHIFT_CREATED", "ATTENDANCE_CHECKIN"
+  entity     String   // e.g., "attendance", "users", "shifts"
+  entity_id  String?
+  details    Json?
+  created_at DateTime @default(now())
+
+  user       User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([entity, entity_id])
+  @@map("audit_logs")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  user_id    String
+  token_hash String   @unique @db.VarChar(255)
+  expires_at DateTime
+  revoked    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("refresh_tokens")
+}
+
+model PasswordReset {
+  id         String    @id @default(uuid())
+  user_id    String
+  token_hash String    @unique @db.VarChar(255)
+  expires_at DateTime
+  used_at    DateTime?
+  created_at DateTime  @default(now())
+
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("password_resets")
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  user_id    String
+  title      String
+  message    String   @db.Text
+  type       String   @default("shift_assignment")
+  data       Json?
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, is_read])
+  @@map("notifications")
+}
+
+

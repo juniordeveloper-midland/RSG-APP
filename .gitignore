@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Generated build output
+dist/
+build/
+web-build/
+coverage/
+.expo/
+*.tsbuildinfo
+
+# Uploaded files
+backend/uploads/*
