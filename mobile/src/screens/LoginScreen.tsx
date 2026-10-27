@@ -17,13 +17,14 @@ import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 import { authStorage } from '../services/storage';
+import { API_URL } from '../config';
+import { pingBaseUrl } from '../api/client';
 
 export const LoginScreen: React.FC = () => {
   const {
     login,
     loginWithBiometrics,
     biometricStatus,
-    biometricsEnabled,
   } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -32,24 +33,19 @@ export const LoginScreen: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState('');
   const [showServerConfig, setShowServerConfig] = useState(false);
+  const [connTesting, setConnTesting] = useState(false);
+  const [connMessage, setConnMessage] = useState<string | null>(null);
+  const [connOk, setConnOk] = useState<boolean | null>(null);
 
   useEffect(() => {
     authStorage.getServerUrl().then(setServerUrl);
   }, []);
 
-  // Attempt biometric quick unlock if available
-  useEffect(() => {
-    if (biometricStatus.isAvailable && biometricsEnabled) {
-      handleBiometricUnlock();
-    }
-  }, [biometricStatus.isAvailable, biometricsEnabled]);
-
+  // Biometric unlock is OPTIONAL and manual-only: it is never auto-triggered
+  // on mount, so it can never block normal email/password login.
   const handleBiometricUnlock = async () => {
     setErrorMessage(null);
-    const success = await loginWithBiometrics();
-    if (!success && biometricsEnabled) {
-      // User can still log in manually
-    }
+    await loginWithBiometrics();
   };
 
   const handleLogin = async () => {
@@ -64,18 +60,37 @@ export const LoginScreen: React.FC = () => {
     try {
       await login({ email: email.trim(), password });
     } catch (err: any) {
-      if (err.status === 403 || err.code === 'ACCOUNT_SUSPENDED') {
-        setErrorMessage('This account has been suspended. Please contact operations management.');
-      } else if (err.status === 401 || err.code === 'INVALID_CREDENTIALS') {
-        setErrorMessage('Invalid email or password. Please verify credentials.');
-      } else if (err.isNetworkError || err.code === 'NETWORK_ERROR') {
+      const status: number | undefined = err?.status;
+      const code: string | undefined = err?.code;
+
+      // Timeout / unreachable (no response): tell the user exactly which URL
+      // we tried so they can fix Wi-Fi or the API URL in settings.
+      if (
+        err?.isTimeout ||
+        err?.isNetworkError ||
+        status === 0 ||
+        code === 'NETWORK_ERROR' ||
+        code === 'TIMEOUT'
+      ) {
         setErrorMessage(
-          `Unable to connect to server at ${serverUrl}. Please verify the backend is running and network is accessible.`
+          `Cannot reach server at ${serverUrl || API_URL}. Check Wi-Fi and API URL.`
+        );
+      } else if (status === 401) {
+        setErrorMessage('Invalid email or password.');
+      } else if (status === 403) {
+        // Suspended account (or other 403) – show the backend's own message.
+        setErrorMessage(
+          err?.message ||
+            'This account has been suspended. Please contact operations management.'
         );
       } else {
-        setErrorMessage(err.message || 'Login failed. Please try again.');
+        // Any other error – surface status + message for diagnostics.
+        setErrorMessage(
+          `Error ${status ?? 'unknown'}: ${err?.message || 'Login failed. Please try again.'}`
+        );
       }
     } finally {
+      // ALWAYS release the spinner, even on unhandled rejection paths.
       setIsLoading(false);
     }
   };
@@ -90,6 +105,25 @@ export const LoginScreen: React.FC = () => {
     await authStorage.setServerUrl(serverUrl);
     setShowServerConfig(false);
     Alert.alert('Server Configured', `API URL updated to: ${serverUrl}`);
+  };
+
+  // Probe GET <baseURL>/health with a 5s timeout and surface a themed result
+  // ("Server reachable" or "Cannot reach <URL>").
+  const handleTestConnection = async () => {
+    const target = (serverUrl || API_URL).replace(/\/+$/, '');
+    setConnTesting(true);
+    setConnMessage(null);
+    setConnOk(null);
+    try {
+      await pingBaseUrl(target, 5000);
+      setConnOk(true);
+      setConnMessage('Server reachable');
+    } catch {
+      setConnOk(false);
+      setConnMessage(`Cannot reach ${target}`);
+    } finally {
+      setConnTesting(false);
+    }
   };
 
   return (
@@ -213,6 +247,46 @@ export const LoginScreen: React.FC = () => {
               Backend: {serverUrl || 'Default'}
             </Text>
           </TouchableOpacity>
+
+          {/* Dev-only: show the active API URL so the login target is visible. */}
+          {__DEV__ && (
+            <Text style={styles.debugText}>[DEV] API URL: {serverUrl || API_URL}</Text>
+          )}
+
+          {/* Test connection: probe GET <baseURL>/health with a 5s timeout. */}
+          <View style={styles.testConnRow}>
+            <Button
+              title="Test connection"
+              onPress={handleTestConnection}
+              variant="outline"
+              size="sm"
+              isLoading={connTesting}
+              leftIcon={<MaterialCommunityIcons name="lan-connect" size={18} color={theme.colors.text} />}
+            />
+          </View>
+
+          {connMessage && (
+            <View
+              style={[
+                styles.connResultBox,
+                connOk ? styles.connResultOk : styles.connResultFail,
+              ]}
+            >
+              <MaterialCommunityIcons
+                name={connOk ? 'check-circle' : 'alert-circle'}
+                size={16}
+                color={connOk ? theme.colors.success : theme.colors.danger}
+              />
+              <Text
+                style={[
+                  styles.connResultText,
+                  { color: connOk ? theme.colors.success : theme.colors.danger },
+                ]}
+              >
+                {connMessage}
+              </Text>
+            </View>
+          )}
 
           {showServerConfig && (
             <Card style={styles.serverConfigCard}>
@@ -353,6 +427,39 @@ const styles = StyleSheet.create({
   serverConfigToggleText: {
     fontSize: theme.typography.fontSizes.xs,
     color: theme.colors.textDim,
+  },
+  debugText: {
+    fontSize: theme.typography.fontSizes.xs,
+    color: theme.colors.primary,
+    textAlign: 'center',
+    marginTop: theme.spacing.xs,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  testConnRow: {
+    alignItems: 'center',
+    marginTop: theme.spacing.sm,
+  },
+  connResultBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+    marginTop: theme.spacing.sm,
+    borderWidth: 1,
+  },
+  connResultOk: {
+    backgroundColor: theme.colors.successBg,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  connResultFail: {
+    backgroundColor: theme.colors.dangerBg,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  connResultText: {
+    flex: 1,
+    fontSize: theme.typography.fontSizes.xs,
+    lineHeight: 16,
   },
   serverConfigCard: {
     marginTop: theme.spacing.sm,

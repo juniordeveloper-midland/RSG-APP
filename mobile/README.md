@@ -58,9 +58,33 @@ npm start
 
 ### 3. Running on Target Environments
 - **Physical Device**: Scan the terminal QR code using **Expo Go** (Android) or Camera app (iOS).
-- **Android Emulator**: Press `a` in the terminal. (Default API URL: `http://10.0.2.2:4000`).
-- **iOS Simulator**: Press `i` in the terminal. (Default API URL: `http://localhost:4000`).
+- **Android Emulator**: Press `a` in the terminal.
+- **iOS Simulator**: Press `i` in the terminal.
 - **Web Browser Preview**: Press `w` in the terminal.
+
+### 4. API Base URL Resolution
+
+`mobile/src/config.ts` resolves the backend base URL in this priority order (port `4000` is a single constant, `API_PORT`):
+
+1. **Custom URL** — if `EXPO_PUBLIC_API_URL` is set and non-empty (in `mobile/.env`), it is used verbatim. Use this for a remote/staging backend or to override auto-detection.
+2. **Real phone (dev build)** — otherwise, if a dev server is connected, the app derives the PC LAN IP from `Constants.expoConfig.hostUri` (e.g. `192.168.1.5:8081`) and uses `http://<that-ip>:4000`. The backend must be reachable from the phone (same Wi-Fi, firewall open).
+3. **Android emulator** — otherwise `http://10.0.2.2:4000` (the emulator alias for the host's localhost). **iOS Simulator / web** fall back to `http://127.0.0.1:4000`.
+
+The resolved URL is printed to the console at startup and shown on the Login screen in `__DEV__`. Use the **Test connection** button on the Login screen to probe `GET <baseURL>/health` (5 s timeout) — it shows "Server reachable" or "Cannot reach <URL>".
+
+You can also retarget the backend at runtime from the Login / More screen "Backend" setting (stored in SecureStore); it overrides the resolved URL for subsequent requests. See `mobile/.env.example` for all three cases.
+
+#### Prerequisites for a real phone
+- The phone and the PC running the backend are on the **same Wi-Fi/LAN**.
+- The backend is started (`cd backend && npm run dev`) and listening on `0.0.0.0:4000` (or the LAN IP).
+- **Windows firewall** allows inbound TCP on port 4000. Run once in an elevated PowerShell:
+  ```powershell
+  netsh advfirewall firewall add rule name="RSG Backend 4000" dir=in action=allow protocol=TCP localport=4000
+  ```
+  Remove it later with `netsh advfirewall firewall delete rule name="RSG Backend 4000"`.
+
+#### Android cleartext HTTP
+Expo Go and debug / dev-client builds already allow cleartext `http://` traffic **in development**, so reaching the LAN IP requires no extra config and **no rebuild**. Production / release builds block cleartext by default; prefer HTTPS, or (not recommended) enable cleartext via the `expo-build-properties` plugin (`android.usesCleartextTraffic: true`), which requires a prebuild / EAS rebuild to take effect.
 
 ---
 

@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { User } from '../types/auth';
+import { API_URL } from '../config';
 
 const ACCESS_TOKEN_KEY = 'rsg_mobile_access_token';
 const REFRESH_TOKEN_KEY = 'rsg_mobile_refresh_token';
@@ -8,11 +9,10 @@ const USER_KEY = 'rsg_mobile_user';
 const BIOMETRICS_KEY = 'rsg_mobile_biometrics_enabled';
 const SERVER_URL_KEY = 'rsg_mobile_server_url';
 
-// Default backend host depending on platform
-// Android Emulator uses 10.0.2.2 to reach host machine's localhost:4000
-// iOS Simulator and Web use localhost:4000 or 127.0.0.1:4000
-export const DEFAULT_SERVER_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://127.0.0.1:4000';
+// Default backend host. Driven by EXPO_PUBLIC_API_URL via config (with a
+// platform-aware fallback), so the env var stays the single source of truth.
+// An in-app override (Login/More screens) can still replace this per request.
+export const DEFAULT_SERVER_URL = API_URL;
 
 // In-memory fallback for environments without SecureStore support
 const memoryFallback = new Map<string, string>();

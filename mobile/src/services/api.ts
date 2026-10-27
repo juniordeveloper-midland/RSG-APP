@@ -1,24 +1,14 @@
 import { authStorage } from './storage';
 import { offlineDb } from './database';
-import { QueueActionType } from '../types/offline';
 import { AuthResponse, LoginCredentials, User } from '../types/auth';
 import { AttendanceRecord, CheckInPayload, CheckOutPayload } from '../types/attendance';
 import { PatrolScanPayload, PatrolScanResult } from '../types/patrol';
 import { RotaItem } from '../types/shift';
+import { apiFetch, ApiError } from '../api/client';
 
-export class ApiError extends Error {
-  status?: number;
-  code?: string;
-  isNetworkError: boolean;
-
-  constructor(message: string, status?: number, code?: string, isNetworkError: boolean = false) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-    this.isNetworkError = isNetworkError;
-  }
-}
+// Re-export so existing imports (`import { apiFetch, ApiError } from './api'`)
+// – e.g. the offline queue – keep working against the single axios client.
+export { apiFetch, ApiError };
 
 export interface OfflineOptimisticResponse<T> {
   data: T;
@@ -27,128 +17,22 @@ export interface OfflineOptimisticResponse<T> {
   requestId: string;
 }
 
-// Queue for pending requests while refreshing token
-let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
-
-const subscribeTokenRefresh = (cb: (token: string) => void) => {
-  refreshSubscribers.push(cb);
-};
-
-const onRefreshed = (token: string) => {
-  refreshSubscribers.forEach((cb) => cb(token));
-  refreshSubscribers = [];
-};
-
-/**
- * Base HTTP fetch wrapper with JWT refresh and network error detection.
- */
-export async function apiFetch<T>(
-  endpoint: string,
-  options: RequestInit = {},
-  isRetry: boolean = false
-): Promise<T> {
-  const baseUrl = await authStorage.getServerUrl();
-  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-
-  const token = await authStorage.getAccessToken();
-  if (token && !headers['Authorization']) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(url, { ...options, headers });
-  } catch (err: any) {
-    throw new ApiError(
-      'Unable to connect to RSG Server. Please check your internet connection or server settings.',
-      0,
-      'NETWORK_ERROR',
-      true
-    );
-  }
-
-  // Token refresh logic on 401
-  if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh') && !isRetry) {
-    const refreshToken = await authStorage.getRefreshToken();
-    if (!refreshToken) {
-      await authStorage.clearAuth();
-      throw new ApiError('Authentication expired. Please log in again.', 401, 'AUTH_EXPIRED');
-    }
-
-    if (!isRefreshing) {
-      isRefreshing = true;
-      try {
-        const refreshRes = await fetch(`${baseUrl}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-        });
-
-        if (!refreshRes.ok) {
-          throw new Error('Refresh rejected');
-        }
-
-        const refreshData = await refreshRes.json();
-        const newAccessToken = refreshData.data.accessToken;
-        const newRefreshToken = refreshData.data.refreshToken;
-
-        await authStorage.setAccessToken(newAccessToken);
-        if (newRefreshToken) {
-          await authStorage.setRefreshToken(newRefreshToken);
-        }
-
-        isRefreshing = false;
-        onRefreshed(newAccessToken);
-      } catch {
-        isRefreshing = false;
-        refreshSubscribers = [];
-        await authStorage.clearAuth();
-        throw new ApiError('Session expired. Please log in again.', 401, 'SESSION_EXPIRED');
-      }
-    }
-
-    const retryToken = await new Promise<string>((resolve) => {
-      subscribeTokenRefresh((t) => resolve(t));
-    });
-
-    headers['Authorization'] = `Bearer ${retryToken}`;
-    return apiFetch<T>(endpoint, { ...options, headers }, true);
-  }
-
-  if (!response.ok) {
-    let errorMessage = `Server error (${response.status})`;
-    let errorCode = `HTTP_${response.status}`;
-
-    try {
-      const errJson = await response.json();
-      if (errJson.error?.message) {
-        errorMessage = errJson.error.message;
-        errorCode = errJson.error.code || errorCode;
-      }
-    } catch {
-      // response wasn't JSON
-    }
-
-    throw new ApiError(errorMessage, response.status, errorCode, false);
-  }
-
-  const json = await response.json();
-  return json.data !== undefined ? json.data : json;
-}
-
 export const api = {
-  // Auth
+  // ---- Auth ---------------------------------------------------------------
+
+  /**
+   * POST /auth/login
+   * Backend returns: { success: true, data: { accessToken, refreshToken, user } }
+   * `apiFetch` unwraps `data`, so we map accessToken / refreshToken / user
+   * directly and persist them to expo-secure-store.
+   */
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const res = await apiFetch<AuthResponse>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify(credentials),
+      body: credentials,
     });
+
+    // Explicit field mapping (no snake_case/ camelCase mismatch).
     await authStorage.setAccessToken(res.accessToken);
     await authStorage.setRefreshToken(res.refreshToken);
     await authStorage.setUser(res.user);
@@ -161,22 +45,35 @@ export const api = {
       if (refreshToken) {
         await apiFetch('/auth/logout', {
           method: 'POST',
-          body: JSON.stringify({ refreshToken }),
+          body: { refreshToken },
         });
       }
     } catch {
-      // Ignore network errors on logout
+      // Ignore network errors on logout – we clear locally regardless.
     } finally {
       await authStorage.clearAuth();
     }
   },
 
-  getCurrentUser: () => apiFetch<User>('/me'),
+  /**
+   * GET /me
+   * Backend returns: { success: true, data: { user: {...} } }
+   * So after `apiFetch` unwraps `data` we still have `{ user }` and must pull
+   * the nested user object out before exposing it as a `User`.
+   */
+  getCurrentUser: async (): Promise<User> => {
+    const res = await apiFetch<{ user: User }>('/me');
+    return res.user;
+  },
 
-  // Rota
+  // ---- Rota ---------------------------------------------------------------
+
   getMyRota: async (): Promise<RotaItem[]> => {
     try {
-      const rota = await apiFetch<RotaItem[]>('/me/rota');
+      // GET /me/rota -> { success, data: { rota: [...] } }. After apiFetch
+      // unwraps `data` we still have { rota: [...] }, so pull the array out.
+      const res = await apiFetch<{ rota: RotaItem[] }>('/me/rota');
+      const rota = res?.rota ?? [];
       await offlineDb.setCache('my_rota', rota);
       return rota;
     } catch (err: any) {
@@ -188,14 +85,15 @@ export const api = {
     }
   },
 
-  // Attendance (with offline queue fallbacks)
+  // ---- Attendance (with offline queue fallbacks) ---------------------------
+
   checkIn: async (
-    payload: CheckInPayload
+    payload: CheckInPayload,
   ): Promise<AttendanceRecord | OfflineOptimisticResponse<Partial<AttendanceRecord>>> => {
     try {
       const result = await apiFetch<AttendanceRecord>('/attendance/check-in', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: payload,
       });
       // Cache active shift
       await offlineDb.setCache('active_attendance', result);
@@ -207,7 +105,7 @@ export const api = {
           payload.request_id,
           'attendance_checkin',
           '/attendance/check-in',
-          payload
+          payload,
         );
 
         const optimisticRecord: Partial<AttendanceRecord> = {
@@ -238,12 +136,12 @@ export const api = {
   },
 
   checkOut: async (
-    payload: CheckOutPayload
+    payload: CheckOutPayload,
   ): Promise<AttendanceRecord | OfflineOptimisticResponse<Partial<AttendanceRecord>>> => {
     try {
       const result = await apiFetch<AttendanceRecord>('/attendance/check-out', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: payload,
       });
       await offlineDb.setCache('active_attendance', null as any);
       return result;
@@ -253,7 +151,7 @@ export const api = {
           payload.request_id,
           'attendance_checkout',
           '/attendance/check-out',
-          payload
+          payload,
         );
 
         const optimisticRecord: Partial<AttendanceRecord> = {
@@ -279,14 +177,15 @@ export const api = {
     }
   },
 
-  // Patrol scan (with offline queue fallbacks)
+  // ---- Patrol scan (with offline queue fallbacks) --------------------------
+
   scanPatrolQr: async (
-    payload: PatrolScanPayload
+    payload: PatrolScanPayload,
   ): Promise<PatrolScanResult | OfflineOptimisticResponse<Partial<PatrolScanResult>>> => {
     try {
       const result = await apiFetch<PatrolScanResult>('/patrol/scan', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: payload,
       });
       return result;
     } catch (err: any) {
@@ -295,7 +194,7 @@ export const api = {
           payload.request_id,
           'patrol_scan',
           '/patrol/scan',
-          payload
+          payload,
         );
 
         const optimisticScan: Partial<PatrolScanResult> = {
