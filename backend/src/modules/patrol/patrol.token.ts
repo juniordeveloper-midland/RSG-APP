@@ -11,29 +11,91 @@ export interface PatrolQrPayload {
   issued_at: string;
 }
 
+/** Number of hex characters kept from the full HMAC-SHA256 digest (8 bytes = 16 hex chars). */
+const HMAC_PREFIX_LEN = 16;
+
 /**
- * Generate HMAC-SHA256 signature for the given payload string.
+ * Compute HMAC-SHA256(secret, data) and return the full hex digest.
  */
-function signPayload(serializedPayload: string): string {
+function hmacHex(data: string): string {
   return crypto
     .createHmac('sha256', env.PATROL_HMAC_SECRET)
-    .update(serializedPayload)
+    .update(data)
     .digest('hex');
 }
 
+// ─── Short token (new format) ───────────────────────────────────────────────
+
 /**
- * Generate a tamper-proof signed token containing the patrol QR payload and HMAC signature.
- * Format: base64url(payloadJson) + "." + signatureHex
+ * Generate a short, scannable patrol token.
+ * Format: "RSG1.<qr_id>.<first 16 hex chars of HMAC-SHA256(qr_id)>"
+ *
+ * The qr_id alone is the signed payload — all other metadata (branch, dates)
+ * are looked up from the database during scan verification.
+ * This keeps the QR payload short (~60 chars) so the QR code stays sparse and scannable.
+ */
+export function generateShortPatrolToken(qrId: string): string {
+  const sig = hmacHex(qrId).slice(0, HMAC_PREFIX_LEN);
+  return `RSG1.${qrId}.${sig}`;
+}
+
+/**
+ * Parse and verify a short patrol token without a DB call.
+ * Returns the qr_id if valid, otherwise returns an error string.
+ */
+export function verifyShortPatrolToken(token: string): {
+  isValid: boolean;
+  qrId?: string;
+  error?: string;
+} {
+  if (!token || typeof token !== 'string') {
+    return { isValid: false, error: 'Token is required' };
+  }
+
+  const parts = token.split('.');
+  // Must be exactly "RSG1", "<uuid>", "<16-char hex>"
+  if (parts.length !== 3 || parts[0] !== 'RSG1') {
+    return { isValid: false, error: 'Unrecognised token format — expected RSG1.<id>.<sig>' };
+  }
+
+  const [, qrId, receivedSig] = parts;
+
+  if (!qrId || receivedSig.length !== HMAC_PREFIX_LEN) {
+    return { isValid: false, error: 'Malformed token fields' };
+  }
+
+  const expectedSig = hmacHex(qrId).slice(0, HMAC_PREFIX_LEN);
+
+  // Constant-time comparison padded to full length to avoid timing leaks
+  const expectedBuf = Buffer.from(expectedSig, 'utf8');
+  const receivedBuf = Buffer.from(receivedSig, 'utf8');
+
+  if (expectedBuf.length !== receivedBuf.length) {
+    return { isValid: false, error: 'Signature length mismatch' };
+  }
+
+  if (!crypto.timingSafeEqual(expectedBuf, receivedBuf)) {
+    return { isValid: false, error: 'Token signature invalid (tampered or wrong secret)' };
+  }
+
+  return { isValid: true, qrId };
+}
+
+// ─── Legacy long token (kept for reference / migration only) ────────────────
+
+/**
+ * @deprecated Use generateShortPatrolToken instead.
+ * Kept so existing rows with the old signed_token can still be regenerated if needed.
  */
 export function generateSignedPatrolToken(payload: PatrolQrPayload): string {
   const json = JSON.stringify(payload);
   const encodedPayload = Buffer.from(json, 'utf8').toString('base64url');
-  const signature = signPayload(encodedPayload);
+  const signature = hmacHex(encodedPayload);
   return `${encodedPayload}.${signature}`;
 }
 
 /**
- * Verifies the integrity and authenticity of a signed patrol token.
+ * @deprecated Verify the old long token format. New scans must use verifyShortPatrolToken.
  */
 export function verifySignedPatrolToken(token: string): {
   isValid: boolean;
@@ -50,11 +112,8 @@ export function verifySignedPatrolToken(token: string): {
   }
 
   const [encodedPayload, receivedSignature] = parts;
+  const expectedSignature = hmacHex(encodedPayload);
 
-  // Compute expected signature
-  const expectedSignature = signPayload(encodedPayload);
-
-  // Use timingSafeEqual to avoid timing attacks
   const expectedBuf = Buffer.from(expectedSignature, 'utf8');
   const receivedBuf = Buffer.from(receivedSignature, 'utf8');
 
@@ -75,7 +134,7 @@ export function verifySignedPatrolToken(token: string): {
     }
 
     return { isValid: true, payload };
-  } catch (err) {
+  } catch {
     return { isValid: false, error: 'Failed to decode token payload JSON' };
   }
 }

@@ -32,57 +32,68 @@ export const Patrol: React.FC = () => {
   const [viewQrItem, setViewQrItem] = useState<any | null>(null);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Generate QR onto canvas whenever the modal opens with a new item
+  // Generate QR onto canvas whenever the modal opens with a new item.
+  // Uses the short token (stored as signed_token in the DB row) at 400px native,
+  // displayed at 260px via CSS — margin 4 gives a clean white quiet zone.
   useEffect(() => {
     if (!viewQrItem?.signed_token) return;
     const canvas = qrCanvasRef.current;
     if (!canvas) return;
     QRCodeLib.toCanvas(canvas, viewQrItem.signed_token, {
-      width: 512,
-      margin: 2,
+      width: 400,
+      margin: 4,
       errorCorrectionLevel: 'M',
       color: { dark: '#000000', light: '#ffffff' },
     });
   }, [viewQrItem]);
 
-  // Download the canvas as PNG (same image shown in modal)
-  const handleDownloadQrCanvas = useCallback((name: string) => {
-    const canvas = qrCanvasRef.current;
-    if (!canvas) return;
-    const link = document.createElement('a');
-    link.download = `rsg-qr-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+  // Download PNG — regenerate at 400px for a crisp file (same token, same pixels)
+  const handleDownloadQrCanvas = useCallback((token: string, name: string) => {
+    QRCodeLib.toDataURL(token, {
+      width: 400,
+      margin: 4,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#ffffff' },
+    }).then((dataUrl) => {
+      const link = document.createElement('a');
+      link.download = `rsg-qr-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`;
+      link.href = dataUrl;
+      link.click();
+    });
   }, []);
 
-  // Print just the QR canvas
-  const handlePrintQr = useCallback((name: string, branchName: string) => {
-    const canvas = qrCanvasRef.current;
-    if (!canvas) return;
-    const dataUrl = canvas.toDataURL('image/png');
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>QR Checkpoint – ${name}</title>
-          <style>
-            body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; background: #fff; }
-            img { width: 512px; height: 512px; display: block; }
-            h2 { margin: 16px 0 4px; font-size: 22px; }
-            p  { margin: 0; font-size: 14px; color: #555; }
-          </style>
-        </head>
-        <body>
-          <img src="${dataUrl}" alt="${name}" />
-          <h2>${name}</h2>
-          <p>${branchName}</p>
-          <script>window.onload = () => { window.print(); window.close(); }<\/script>
-        </body>
-      </html>
-    `);
-    win.document.close();
+  // Print — opens a blank window with the 400px QR and triggers browser print
+  const handlePrintQr = useCallback((token: string, name: string, branchName: string) => {
+    QRCodeLib.toDataURL(token, {
+      width: 400,
+      margin: 4,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#ffffff' },
+    }).then((dataUrl) => {
+      const win = window.open('', '_blank');
+      if (!win) return;
+      win.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>QR Checkpoint – ${name}</title>
+            <style>
+              body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; background: #fff; }
+              img { width: 400px; height: 400px; display: block; }
+              h2 { margin: 16px 0 4px; font-size: 22px; }
+              p  { margin: 0; font-size: 14px; color: #555; }
+            </style>
+          </head>
+          <body>
+            <img src="${dataUrl}" alt="${name}" />
+            <h2>${name}</h2>
+            <p>${branchName}</p>
+            <script>window.onload = () => { window.print(); window.close(); }<\/script>
+          </body>
+        </html>
+      `);
+      win.document.close();
+    });
   }, []);
 
   // Form state for creating Checkpoint
@@ -590,27 +601,16 @@ export const Patrol: React.FC = () => {
       >
         {viewQrItem && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px' }}>
-            {/* QR canvas – black on white, 512px native, scaled to fit modal */}
-            <div
+            {/* QR canvas – short token RSG1.<id>.<sig16>, 400px native → 260px CSS */}
+            <canvas
+              ref={qrCanvasRef}
               style={{
-                backgroundColor: '#ffffff',
-                padding: '16px',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: 'var(--shadow-md)',
+                display: 'block',
                 width: '260px',
                 height: '260px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-                flexShrink: 0,
+                background: '#ffffff',
               }}
-            >
-              <canvas
-                ref={qrCanvasRef}
-                style={{ width: '228px', height: '228px', display: 'block', imageRendering: 'pixelated' }}
-              />
-            </div>
+            />
 
             <div>
               <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '0 0 4px 0', color: 'var(--color-text)' }}>
@@ -629,7 +629,7 @@ export const Patrol: React.FC = () => {
                 variant="secondary"
                 style={{ flex: 1 }}
                 leftIcon={<Printer size={16} />}
-                onClick={() => handlePrintQr(viewQrItem.name, viewQrItem.branch?.name || 'Branch Checkpoint')}
+                onClick={() => handlePrintQr(viewQrItem.signed_token, viewQrItem.name, viewQrItem.branch?.name || 'Branch Checkpoint')}
               >
                 Print
               </Button>
@@ -637,7 +637,7 @@ export const Patrol: React.FC = () => {
                 variant="primary"
                 style={{ flex: 1 }}
                 leftIcon={<Download size={16} />}
-                onClick={() => handleDownloadQrCanvas(viewQrItem.name)}
+                onClick={() => handleDownloadQrCanvas(viewQrItem.signed_token, viewQrItem.name)}
               >
                 Download PNG
               </Button>

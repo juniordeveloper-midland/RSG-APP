@@ -8,8 +8,8 @@ import { AppError } from '../../middleware/errorHandler';
 import { recordAuditLog } from '../../utils/audit';
 import { verifyGeofence } from '../attendance/attendance.geofence';
 import {
-  generateSignedPatrolToken,
-  verifySignedPatrolToken,
+  generateShortPatrolToken,
+  verifyShortPatrolToken,
   generateQrCodePngBuffer,
   generateQrCodeDataUrl,
 } from './patrol.token';
@@ -42,18 +42,8 @@ export class PatrolService {
     }
 
     const qrId = crypto.randomUUID();
-    const nowIso = new Date().toISOString();
 
-    const payload = {
-      qr_id: qrId,
-      branch_id: branch.id,
-      name: input.name,
-      start_date: input.start_date || null,
-      end_date: input.end_date || null,
-      issued_at: nowIso,
-    };
-
-    const signedToken = generateSignedPatrolToken(payload);
+    const signedToken = generateShortPatrolToken(qrId);
     const qrDataUrl = await generateQrCodeDataUrl(signedToken);
 
     const patrolQr = await prisma.patrolQr.create({
@@ -207,21 +197,21 @@ export class PatrolService {
       return existing;
     }
 
-    // 2. Verify token cryptographic signature
-    const verification = verifySignedPatrolToken(input.token);
-    if (!verification.isValid || !verification.payload) {
+    // 2. Verify token cryptographic signature (short format: RSG1.<qr_id>.<16-char hmac>)
+    const verification = verifyShortPatrolToken(input.token);
+    if (!verification.isValid || !verification.qrId) {
       throw new AppError(
         'INVALID_TOKEN',
-        verification.error || 'Patrol QR token signature is invalid or has been tampered with',
+        verification.error || 'Patrol QR token is invalid or has been tampered with',
         400
       );
     }
 
-    const payload = verification.payload;
+    const qrId = verification.qrId;
 
-    // 3. Database checkpoint lookup
+    // 3. Database checkpoint lookup (all metadata comes from DB, not the token)
     const qr = await prisma.patrolQr.findUnique({
-      where: { id: payload.qr_id },
+      where: { id: qrId },
       include: { branch: true },
     });
 
