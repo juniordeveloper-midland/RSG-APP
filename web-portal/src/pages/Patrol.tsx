@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import QRCodeLib from 'qrcode';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   QrCode,
@@ -29,6 +30,60 @@ export const Patrol: React.FC = () => {
   const [branchFilter, setBranchFilter] = useState('');
   const [createQrModalOpen, setCreateQrModalOpen] = useState(false);
   const [viewQrItem, setViewQrItem] = useState<any | null>(null);
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Generate QR onto canvas whenever the modal opens with a new item
+  useEffect(() => {
+    if (!viewQrItem?.signed_token) return;
+    const canvas = qrCanvasRef.current;
+    if (!canvas) return;
+    QRCodeLib.toCanvas(canvas, viewQrItem.signed_token, {
+      width: 512,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+  }, [viewQrItem]);
+
+  // Download the canvas as PNG (same image shown in modal)
+  const handleDownloadQrCanvas = useCallback((name: string) => {
+    const canvas = qrCanvasRef.current;
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = `rsg-qr-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }, []);
+
+  // Print just the QR canvas
+  const handlePrintQr = useCallback((name: string, branchName: string) => {
+    const canvas = qrCanvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>QR Checkpoint – ${name}</title>
+          <style>
+            body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; background: #fff; }
+            img { width: 512px; height: 512px; display: block; }
+            h2 { margin: 16px 0 4px; font-size: 22px; }
+            p  { margin: 0; font-size: 14px; color: #555; }
+          </style>
+        </head>
+        <body>
+          <img src="${dataUrl}" alt="${name}" />
+          <h2>${name}</h2>
+          <p>${branchName}</p>
+          <script>window.onload = () => { window.print(); window.close(); }<\/script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  }, []);
 
   // Form state for creating Checkpoint
   const [qrName, setQrName] = useState('');
@@ -535,18 +590,25 @@ export const Patrol: React.FC = () => {
       >
         {viewQrItem && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px' }}>
+            {/* QR canvas – black on white, 512px native, scaled to fit modal */}
             <div
               style={{
                 backgroundColor: '#ffffff',
                 padding: '16px',
                 borderRadius: 'var(--radius-lg)',
                 boxShadow: 'var(--shadow-md)',
+                width: '260px',
+                height: '260px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                flexShrink: 0,
               }}
             >
-              <img
-                src={viewQrItem.qr_data_url || `/patrol/qrs/${viewQrItem.id}/image`}
-                alt={viewQrItem.name}
-                style={{ width: '260px', height: '260px', display: 'block' }}
+              <canvas
+                ref={qrCanvasRef}
+                style={{ width: '228px', height: '228px', display: 'block', imageRendering: 'pixelated' }}
               />
             </div>
 
@@ -567,7 +629,7 @@ export const Patrol: React.FC = () => {
                 variant="secondary"
                 style={{ flex: 1 }}
                 leftIcon={<Printer size={16} />}
-                onClick={() => window.print()}
+                onClick={() => handlePrintQr(viewQrItem.name, viewQrItem.branch?.name || 'Branch Checkpoint')}
               >
                 Print
               </Button>
@@ -575,7 +637,7 @@ export const Patrol: React.FC = () => {
                 variant="primary"
                 style={{ flex: 1 }}
                 leftIcon={<Download size={16} />}
-                onClick={() => handleDownloadQrPng(viewQrItem.id, viewQrItem.name)}
+                onClick={() => handleDownloadQrCanvas(viewQrItem.name)}
               >
                 Download PNG
               </Button>
