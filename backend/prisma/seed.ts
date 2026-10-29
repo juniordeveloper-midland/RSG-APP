@@ -6,12 +6,37 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting RSG database seed...');
 
-  // 1. Create or upsert Branch
-  const branch = await prisma.branch.upsert({
-    where: { id: 'branch-hq-001' },
+  // 1. Create or upsert Default Client (Region Security Guarding)
+  const defaultClient = await prisma.client.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000001' },
     update: {},
     create: {
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'Region Security Guarding',
+      code: 'REGI-001',
+      industry: 'Security Services',
+      contact_name: 'System Administrator',
+      contact_email: 'admin@rsg.com',
+      contact_phone: '+1-000-000-0000',
+      status: 'active',
+      billing_address: '1 Security House',
+      billing_city: 'London',
+      billing_state: 'England',
+      billing_country: 'United Kingdom',
+      billing_zip: 'SW1A 1AA',
+      billing_phone: '+44-000-000-0000',
+      billing_email: 'billing@rsg.com',
+    },
+  });
+  console.log(`✅ Default client seeded: ${defaultClient.name} (${defaultClient.id})`);
+
+  // 2. Create or upsert Branch
+  const branch = await prisma.branch.upsert({
+    where: { id: 'branch-hq-001' },
+    update: { client_id: defaultClient.id },
+    create: {
       id: 'branch-hq-001',
+      client_id: defaultClient.id,
       name: 'RSG Central Headquarters',
       address: '100 Security Way, City Centre',
       lat: 51.5073509,

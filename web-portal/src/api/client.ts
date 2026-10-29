@@ -258,17 +258,59 @@ export const api = {
   // ── Dashboard ─────────────────────────────────────────────────────────────
   getDashboardStats: () => apiFetch<any>('/management/dashboard'),
 
+  // ── Clients ──────────────────────────────────────────────────────────────
+  getClients: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    industry?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.search) q.set('search', params.search);
+    if (params?.status) q.set('status', params.status);
+    if (params?.industry) q.set('industry', params.industry);
+    return apiFetch<any>(`/clients?${q}`);
+  },
+  getClient: (id: string) => apiFetch<any>(`/clients/${id}`),
+  createClient: (data: any) =>
+    apiFetch<any>('/clients', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateClient: (id: string, data: any) =>
+    apiFetch<any>(`/clients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  archiveClient: (id: string) =>
+    apiFetch<any>(`/clients/${id}/archive`, {
+      method: 'PATCH',
+    }),
+  uploadClientPhoto: (file: File) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiFetch<{ photo_url: string }>('/clients/upload-photo', {
+      method: 'POST',
+      body: fd,
+    });
+  },
+
   // ── Branches ─────────────────────────────────────────────────────────────
   getBranches: (params?: {
     page?: number;
     limit?: number;
     search?: string;
+    client_id?: string;
     is_active?: boolean;
   }) => {
     const q = new URLSearchParams();
     if (params?.page) q.set('page', String(params.page));
     if (params?.limit) q.set('limit', String(params.limit));
     if (params?.search) q.set('search', params.search);
+    if (params?.client_id) q.set('client_id', params.client_id);
     if (params?.is_active !== undefined)
       q.set('is_active', String(params.is_active));
     return apiFetch<any>(`/branches?${q}`);

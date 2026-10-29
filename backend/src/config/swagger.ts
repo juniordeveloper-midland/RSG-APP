@@ -26,6 +26,10 @@ const swaggerOptions: swaggerJsDoc.Options = {
         description: 'Authentication, token refresh, password recovery, and profile',
       },
       {
+        name: 'Clients',
+        description: 'Client company profiles, contact persons, billing, and attached branches',
+      },
+      {
         name: 'Branches',
         description: 'Branch management, geofences, and site locations',
       },

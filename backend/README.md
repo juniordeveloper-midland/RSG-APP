@@ -754,3 +754,104 @@ Covers:
 - Formatted Excel spreadsheet (.xlsx) export
 - Automated missed patrol detection cron triggering `Alert` (`type: 'missed_patrol'`)
 
+
+---
+
+## Client Management Module (Manager Only)
+
+The Client Management module allows operations managers to manage client companies, designated contact persons, billing profiles, and attached operational branches.
+
+### Data Model & Relations
+- **Client**:
+  - **Company**: `name`, `code` (unique), `website` (optional), `industry`, `client_since` (YYYY-MM-DD)
+  - **Contact Person**: `contact_photo`, `contact_name`, `contact_email`, `contact_phone`, `status` (`active`, `inactive`, `archived`), `password` (securely hashed with bcrypt; never exposed in responses or logs)
+  - **Billing**: `billing_address`, `billing_city`, `billing_state`, `billing_country`, `billing_zip`, `billing_phone`, `billing_email`
+- **Branches Relation**: Each branch is attached to a client via `client_id` (foreign key to `clients.id` with `onDelete: Restrict`).
+- **Default Client**: Existing legacy branches are attached to default client `00000000-0000-0000-0000-000000000001` (`Region Security Guarding`).
+
+### Endpoints (Manager Only)
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/clients` (or `/management/clients`) | Create a new client profile |
+| `GET` | `/clients` (or `/management/clients`) | List clients with pagination, search, status filter, and branch counts |
+| `GET` | `/clients/:id` (or `/management/clients/:id`) | View client details and attached operational branches |
+| `PUT` / `PATCH` | `/clients/:id` (or `/management/clients/:id`) | Edit client company, contact, or billing details |
+| `PATCH` / `POST` | `/clients/:id/archive` | Archive a client (`status: 'archived'`) |
+| `DELETE` | `/clients/:id` | Archive client alias |
+
+### Example Requests
+
+#### 1. Add Client (`POST /clients`)
+```bash
+curl -X POST "http://localhost:4000/clients" \
+  -H "Authorization: Bearer <MANAGER_ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Barclays Retail Group",
+    "code": "BARC-001",
+    "website": "https://www.barclays.co.uk",
+    "industry": "Banking & Financial Services",
+    "client_since": "2024-01-15",
+    "contact_name": "Robert Sterling",
+    "contact_email": "r.sterling@barclays.co.uk",
+    "contact_phone": "+442071161000",
+    "status": "active",
+    "password": "SecurePassword123!",
+    "billing_address": "1 Churchill Place, Canary Wharf",
+    "billing_city": "London",
+    "billing_state": "Greater London",
+    "billing_country": "United Kingdom",
+    "billing_zip": "E14 5HP",
+    "billing_phone": "+442071161000",
+    "billing_email": "billing@barclays.co.uk"
+  }'
+```
+
+#### 2. List Clients (`GET /clients`)
+```bash
+curl -X GET "http://localhost:4000/clients?page=1&limit=10&search=Barclays&status=active" \
+  -H "Authorization: Bearer <MANAGER_ACCESS_TOKEN>"
+```
+
+#### 3. View Client (`GET /clients/:id`)
+```bash
+curl -X GET "http://localhost:4000/clients/<CLIENT_ID>" \
+  -H "Authorization: Bearer <MANAGER_ACCESS_TOKEN>"
+```
+
+#### 4. Edit Client (`PATCH /clients/:id`)
+```bash
+curl -X PATCH "http://localhost:4000/clients/<CLIENT_ID>" \
+  -H "Authorization: Bearer <MANAGER_ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "billing_city": "Manchester",
+    "billing_zip": "M1 1AA"
+  }'
+```
+
+#### 5. Archive Client (`PATCH /clients/:id/archive`)
+```bash
+curl -X PATCH "http://localhost:4000/clients/<CLIENT_ID>/archive" \
+  -H "Authorization: Bearer <MANAGER_ACCESS_TOKEN>"
+```
+
+---
+
+### Running Client Tests
+
+Execute the Client Module test suite:
+```bash
+npx jest src/__tests__/clients.test.ts
+```
+Covers:
+- RBAC validation: Employees/guards blocked (`403 FORBIDDEN`), unauthenticated blocked (`401 UNAUTHORIZED`)
+- Client creation with all Company, Contact Person, and Billing fields
+- Contact password hashing with bcrypt (never returned in responses or audit logs)
+- Duplicate code detection (`409 CLIENT_CODE_EXISTS`)
+- Input validation on emails and formats (`422 VALIDATION_ERROR`)
+- Paginated client listing with search, status filtering, and branch count (`_count.branches`)
+- Client detail retrieval with attached branch list
+- Client updating with audit logging
+- Client archiving (`status: 'archived'`)
+- Branch attachment to clients and legacy branch preservation on default client

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Shield,
   LayoutDashboard,
+  Briefcase,
   Building2,
   Users,
   CalendarDays,
@@ -32,6 +33,7 @@ export const AppLayout: React.FC = () => {
 
   const navItems: NavItem[] = [
     { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { to: '/clients', label: 'Clients', icon: <Briefcase size={20} /> },
     { to: '/branches', label: 'Branches', icon: <Building2 size={20} /> },
     { to: '/employees', label: 'Employees', icon: <Users size={20} /> },
     { to: '/shifts', label: 'Shifts & Rota', icon: <CalendarDays size={20} /> },

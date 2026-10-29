@@ -12,6 +12,7 @@ import { healthRoutes } from './modules/health/health.routes';
 import { authRoutes } from './modules/auth/auth.routes';
 import { managementRoutes } from './modules/management/management.routes';
 import { branchRoutes } from './modules/branches/branch.routes';
+import { clientRoutes } from './modules/clients/client.routes';
 import { employeeRoutes } from './modules/employees/employee.routes';
 import { shiftRoutes } from './modules/shifts/shift.routes';
 import { meRoutes } from './modules/me/me.routes';
@@ -59,6 +60,7 @@ app.use('/health', healthRoutes);
 app.use('/auth', authRoutes);
 app.use('/me', meRoutes);
 app.use('/management', managementRoutes);
+app.use('/clients', clientRoutes);
 app.use('/branches', branchRoutes);
 app.use('/employees', employeeRoutes);
 app.use('/shifts', shiftRoutes);
@@ -66,6 +68,7 @@ app.use('/attendance', attendanceRoutes);
 app.use('/patrol', patrolRoutes);
 
 // Management route aliases for portal consistency
+app.use('/management/clients', clientRoutes);
 app.use('/management/branches', branchRoutes);
 app.use('/management/employees', employeeRoutes);
 app.use('/management/shifts', shiftRoutes);

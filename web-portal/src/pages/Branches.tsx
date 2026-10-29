@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Building2, Edit2, Ban, CheckCircle2, MapPin } from 'lucide-react';
+import { Plus, Search, Building2, Briefcase, Edit2, Ban, CheckCircle2, MapPin } from 'lucide-react';
 import { api } from '../api/client';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
@@ -13,11 +13,13 @@ import { ErrorBanner } from '../components/common/ErrorBanner';
 export const Branches: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [clientFilter, setClientFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editBranch, setEditBranch] = useState<any | null>(null);
 
   // Form states for Create Branch
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState('51.5074');
@@ -25,12 +27,32 @@ export const Branches: React.FC = () => {
   const [radiusM, setRadiusM] = useState('150');
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Query all clients for selection
+  const { data: clientsData } = useQuery({
+    queryKey: ['clients-lookup'],
+    queryFn: () => api.getClients({ page: 1, limit: 100 }),
+  });
+  const clientsList: any[] = clientsData?.items ?? [];
+
+  // Set default client when clients are loaded
+  useEffect(() => {
+    if (clientsList.length > 0 && !selectedClientId) {
+      setSelectedClientId(clientsList[0].id);
+    }
+  }, [clientsList, selectedClientId]);
+
+  // Query branches with client and search filter
   const { data, isLoading, error: queryError } = useQuery({
-    queryKey: ['branches', page, search],
-    queryFn: () => api.getBranches({ page, limit: 10, search }),
+    queryKey: ['branches', page, search, clientFilter],
+    queryFn: () =>
+      api.getBranches({
+        page,
+        limit: 10,
+        search: search.trim() || undefined,
+        client_id: clientFilter !== 'all' ? clientFilter : undefined,
+      }),
   });
 
-  // Backend returns { items: [...], pagination: {...} }
   const branches = data?.items ?? [];
   const pagination = data?.pagination;
 
@@ -38,6 +60,7 @@ export const Branches: React.FC = () => {
     mutationFn: (newBranch: any) => api.createBranch(newBranch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
       setCreateModalOpen(false);
       setName('');
       setAddress('');
@@ -50,6 +73,7 @@ export const Branches: React.FC = () => {
     mutationFn: ({ id, data }: { id: string; data: any }) => api.updateBranch(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
       setEditBranch(null);
     },
     onError: (err: any) => setFormError(err.message),
@@ -69,6 +93,7 @@ export const Branches: React.FC = () => {
     e.preventDefault();
     setFormError(null);
     createMutation.mutate({
+      client_id: selectedClientId || undefined,
       name,
       address,
       lat: Number(lat),
@@ -84,6 +109,7 @@ export const Branches: React.FC = () => {
     updateMutation.mutate({
       id: editBranch.id,
       data: {
+        client_id: editBranch.client_id || undefined,
         address: editBranch.address,
         lat: Number(editBranch.lat),
         lng: Number(editBranch.lng),
@@ -120,12 +146,31 @@ export const Branches: React.FC = () => {
       ),
     },
     {
+      key: 'client',
+      header: 'Client Account',
+      render: (row) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Briefcase size={14} style={{ color: 'var(--color-primary)' }} />
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text)' }}>
+              {row.client?.name || 'Region Security Guarding'}
+            </div>
+            {row.client?.code && (
+              <span style={{ fontSize: '11px', color: 'var(--color-text-dim)', fontFamily: 'monospace' }}>
+                {row.client.code}
+              </span>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
       key: 'address',
       header: 'Address',
       render: (row) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <MapPin size={14} style={{ color: 'var(--color-text-dim)', flexShrink: 0 }} />
-          <span style={{ fontSize: '13px' }}>{row.address}</span>
+          <span style={{ fontSize: '13px' }}>{row.address || '—'}</span>
         </div>
       ),
     },
@@ -196,6 +241,7 @@ export const Branches: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <ErrorBanner message={queryError ? (queryError as any).message : null} />
+
       {/* Page Header */}
       <div
         style={{
@@ -218,7 +264,12 @@ export const Branches: React.FC = () => {
         <Button
           variant="primary"
           leftIcon={<Plus size={16} />}
-          onClick={() => setCreateModalOpen(true)}
+          onClick={() => {
+            if (clientsList.length > 0 && !selectedClientId) {
+              setSelectedClientId(clientsList[0].id);
+            }
+            setCreateModalOpen(true);
+          }}
         >
           Add New Branch
         </Button>
@@ -226,7 +277,7 @@ export const Branches: React.FC = () => {
 
       {/* Filter / Search Bar */}
       <Card>
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ flex: 1, minWidth: '240px' }}>
             <Input
               placeholder="Search branch by name or location..."
@@ -237,6 +288,34 @@ export const Branches: React.FC = () => {
               }}
               leftIcon={<Search size={16} />}
             />
+          </div>
+
+          {/* Client Filter */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Client:</span>
+            <select
+              value={clientFilter}
+              onChange={(e) => {
+                setClientFilter(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-text)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '8px 12px',
+                fontSize: '13px',
+                outline: 'none',
+              }}
+            >
+              <option value="all">All Clients</option>
+              {clientsList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.code})
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </Card>
@@ -259,7 +338,7 @@ export const Branches: React.FC = () => {
         }
       />
 
-      {/* Create Branch Modal */}
+      {/* Create Branch Modal: Pick Client First, Then Branch Fields */}
       <Modal
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
@@ -267,13 +346,52 @@ export const Branches: React.FC = () => {
       >
         <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {formError && (
-            <div style={{ padding: '10px', backgroundColor: 'var(--color-danger-bg)', color: 'var(--color-danger)', borderRadius: 'var(--radius-md)', fontSize: '13px' }}>
+            <div
+              style={{
+                padding: '10px',
+                backgroundColor: 'var(--color-danger-bg)',
+                color: 'var(--color-danger)',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '13px',
+              }}
+            >
               {formError}
             </div>
           )}
 
+          {/* Pick Client First */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+              1. Select Client *
+            </label>
+            <select
+              value={selectedClientId}
+              onChange={(e) => setSelectedClientId(e.target.value)}
+              required
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-text)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '9px 12px',
+                fontSize: '14px',
+                outline: 'none',
+                minHeight: '38px',
+              }}
+            >
+              {clientsList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.code})
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-dim)' }}>
+              Branches must belong to an established client account.
+            </span>
+          </div>
+
           <Input
-            label="Branch Name"
+            label="2. Branch Name *"
             placeholder="e.g. Manchester North Hub"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -281,7 +399,7 @@ export const Branches: React.FC = () => {
           />
 
           <Input
-            label="Physical Address"
+            label="3. Physical Address *"
             placeholder="e.g. 45 Deansgate, Manchester"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
@@ -290,7 +408,7 @@ export const Branches: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Input
-              label="Latitude Pin"
+              label="Latitude Pin *"
               type="number"
               step="any"
               value={lat}
@@ -298,7 +416,7 @@ export const Branches: React.FC = () => {
               required
             />
             <Input
-              label="Longitude Pin"
+              label="Longitude Pin *"
               type="number"
               step="any"
               value={lng}
@@ -308,7 +426,7 @@ export const Branches: React.FC = () => {
           </div>
 
           <Input
-            label="Geofence Radius (meters)"
+            label="Geofence Radius (meters) *"
             type="number"
             min="10"
             max="10000"
@@ -337,9 +455,36 @@ export const Branches: React.FC = () => {
       >
         {editBranch && (
           <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Reassign Client if needed */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                Client Account
+              </label>
+              <select
+                value={editBranch.client_id || ''}
+                onChange={(e) => setEditBranch({ ...editBranch, client_id: e.target.value })}
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  color: 'var(--color-text)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '9px 12px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  minHeight: '38px',
+                }}
+              >
+                {clientsList.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <Input
               label="Address"
-              value={editBranch.address}
+              value={editBranch.address || ''}
               onChange={(e) => setEditBranch({ ...editBranch, address: e.target.value })}
               required
             />

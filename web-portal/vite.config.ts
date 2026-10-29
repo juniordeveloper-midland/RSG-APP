@@ -9,12 +9,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       // ONLY /api is proxied — strips /api prefix before forwarding to backend.
-      // This prevents frontend routes (/shifts, /attendance, etc.) from being
-      // accidentally proxied and returning backend JSON errors.
       '/api': {
         target: 'http://127.0.0.1:4000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      // Proxy static uploads to backend server
+      '/uploads': {
+        target: 'http://127.0.0.1:4000',
+        changeOrigin: true,
       },
     },
   },

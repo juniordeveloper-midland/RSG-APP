@@ -6,6 +6,8 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { Clients } from './pages/Clients';
+import { ClientDetails } from './pages/ClientDetails';
 import { Branches } from './pages/Branches';
 import { Employees } from './pages/Employees';
 import { Shifts } from './pages/Shifts';
@@ -82,6 +84,8 @@ export const App: React.FC = () => {
               >
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+                <Route path="clients" element={<ErrorBoundary><Clients /></ErrorBoundary>} />
+                <Route path="clients/:id" element={<ErrorBoundary><ClientDetails /></ErrorBoundary>} />
                 <Route path="branches" element={<ErrorBoundary><Branches /></ErrorBoundary>} />
                 <Route path="employees" element={<ErrorBoundary><Employees /></ErrorBoundary>} />
                 <Route path="shifts" element={<ErrorBoundary><Shifts /></ErrorBoundary>} />

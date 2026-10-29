@@ -9,20 +9,44 @@ import {
   ListBranchesQuery,
 } from './branch.validation';
 
+const DEFAULT_CLIENT_ID = '00000000-0000-0000-0000-000000000001';
+
 export class BranchService {
   /**
    * Create a new branch with geolocation and geofence radius.
+   * Associates with client_id (defaults to default client if not specified).
    * Logs BRANCH_CREATED in audit_logs.
    */
   async createBranch(input: CreateBranchInput, managerId: string, req?: Request) {
+    const clientId = input.client_id || DEFAULT_CLIENT_ID;
+
+    // Verify client exists
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
+    });
+
+    if (!client) {
+      throw new AppError('CLIENT_NOT_FOUND', `Client with ID '${clientId}' was not found`, 404);
+    }
+
     const branch = await prisma.branch.create({
       data: {
+        client_id: clientId,
         name: input.name,
         address: input.address,
         lat: new Prisma.Decimal(input.lat),
         lng: new Prisma.Decimal(input.lng),
         radius_m: input.radius_m,
         is_active: input.is_active,
+      },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
       },
     });
 
@@ -32,6 +56,7 @@ export class BranchService {
       entity: 'branches',
       entityId: branch.id,
       details: {
+        client_id: branch.client_id,
         name: branch.name,
         address: branch.address,
         lat: Number(branch.lat),
@@ -46,16 +71,20 @@ export class BranchService {
   }
 
   /**
-   * List branches with search, active filter, and pagination.
+   * List branches with search, active filter, client filter, and pagination.
    */
   async listBranches(query: ListBranchesQuery) {
-    const { page, limit, search, is_active } = query;
+    const { page, limit, search, client_id, is_active } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.BranchWhereInput = {};
 
     if (is_active !== undefined) {
       where.is_active = is_active;
+    }
+
+    if (client_id) {
+      where.client_id = client_id;
     }
 
     if (search) {
@@ -73,6 +102,13 @@ export class BranchService {
         take: limit,
         orderBy: { created_at: 'desc' },
         include: {
+          client: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
           _count: {
             select: {
               users: true,
@@ -96,12 +132,22 @@ export class BranchService {
   }
 
   /**
-   * Get single branch by ID with related resource counts.
+   * Get single branch by ID with related resource counts and client info.
    */
   async getBranchById(id: string) {
     const branch = await prisma.branch.findUnique({
       where: { id },
       include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            contact_name: true,
+            contact_email: true,
+            contact_phone: true,
+          },
+        },
         _count: {
           select: {
             users: true,
@@ -121,7 +167,7 @@ export class BranchService {
   }
 
   /**
-   * Update branch metadata (address, lat/lng coordinates, radius_m, name).
+   * Update branch metadata (address, lat/lng coordinates, radius_m, name, client_id).
    * Logs BRANCH_UPDATED in audit_logs.
    */
   async updateBranch(
@@ -134,6 +180,16 @@ export class BranchService {
 
     const updateData: Prisma.BranchUpdateInput = {};
 
+    if (input.client_id !== undefined) {
+      const client = await prisma.client.findUnique({
+        where: { id: input.client_id },
+      });
+      if (!client) {
+        throw new AppError('CLIENT_NOT_FOUND', `Client with ID '${input.client_id}' was not found`, 404);
+      }
+      updateData.client = { connect: { id: input.client_id } };
+    }
+
     if (input.name !== undefined) updateData.name = input.name;
     if (input.address !== undefined) updateData.address = input.address;
     if (input.lat !== undefined) updateData.lat = new Prisma.Decimal(input.lat);
@@ -144,6 +200,15 @@ export class BranchService {
     const updated = await prisma.branch.update({
       where: { id },
       data: updateData,
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+      },
     });
 
     await recordAuditLog({

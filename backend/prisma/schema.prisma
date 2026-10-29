@@ -54,6 +54,7 @@ model Client {
   contact_email   String
   contact_phone   String
   status          ClientStatus @default(active)
+  password_hash   String?      // bcrypt hash of contact person password
   billing_address String
   billing_city    String
   billing_state   String
@@ -64,6 +65,7 @@ model Client {
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 
+  branches        Branch[]
   projects        Project[]
 
   @@index([status])
@@ -92,22 +94,26 @@ model Project {
 
 model Branch {
   id               String            @id @default(uuid())
+  client_id        String            @default("00000000-0000-0000-0000-000000000001")
   project_id       String            @default("00000000-0000-0000-0000-000000000002")
   name             String
   address          String?
   lat              Decimal           @db.Decimal(10, 8)
   lng              Decimal           @db.Decimal(11, 8)
   radius_m         Float             @default(100)
+  timezone         String            @default("Europe/London")
   is_active        Boolean           @default(true)
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
 
+  client           Client            @relation(fields: [client_id], references: [id], onDelete: Restrict)
   project          Project           @relation(fields: [project_id], references: [id], onDelete: Restrict)
   users            User[]
   shifts           Shift[]
   patrol_qrs       PatrolQr[]
   alerts           Alert[]
 
+  @@index([client_id])
   @@index([project_id])
   @@map("branches")
 }
@@ -177,6 +183,9 @@ model ShiftAssignment {
   start_date     DateTime
   end_date       DateTime?
   excluded_dates Json?     // JSON array of excluded dates: string[]
+  days_of_week   Json?     // Array of 0-6 (Sun-Sat). NULL means every day.
+  request_id     String?   @unique
+  assigned_by    String?
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
 
@@ -184,6 +193,7 @@ model ShiftAssignment {
   user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id, shift_id])
+  @@index([shift_id, start_date, end_date])
   @@map("shift_assignments")
 }
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const createBranchSchema = z.object({
+  client_id: z.string().trim().optional(),
   name: z.string().trim().min(2, 'Branch name must be at least 2 characters').max(100),
   address: z.string().trim().optional(),
   lat: z
@@ -18,6 +19,7 @@ export const createBranchSchema = z.object({
 export type CreateBranchInput = z.infer<typeof createBranchSchema>;
 
 export const updateBranchSchema = z.object({
+  client_id: z.string().trim().optional(),
   name: z.string().trim().min(2, 'Branch name must be at least 2 characters').max(100).optional(),
   address: z.string().trim().optional(),
   lat: z
@@ -40,6 +42,7 @@ export const listBranchesQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(10),
   search: z.string().trim().optional(),
+  client_id: z.string().trim().optional(),
   is_active: z
     .enum(['true', 'false', 'all'])
     .optional()
