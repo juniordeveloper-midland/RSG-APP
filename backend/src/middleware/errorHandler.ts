@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import { Prisma } from '@prisma/client';
 import { sendError } from '../utils/response';
 
 export class AppError extends Error {
@@ -29,14 +30,32 @@ export const errorHandler = (
     return sendError(res, 'VALIDATION_ERROR', 'Input validation failed', 422, err.format());
   }
 
-  // Fallback internal server error (never leak sensitive stack traces in production)
-  // eslint-disable-next-line no-console
-  console.error('Unhandled Server Error:', err);
+  // Handle Prisma / Database errors - never leak internal schema, queries, or paths to users
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError ||
+    err instanceof Prisma.PrismaClientUnknownRequestError ||
+    err instanceof Prisma.PrismaClientRustPanicError ||
+    err instanceof Prisma.PrismaClientInitializationError ||
+    err instanceof Prisma.PrismaClientValidationError ||
+    err.name?.startsWith('PrismaClient') ||
+    err.message?.toLowerCase().includes('prisma')
+  ) {
+    console.error('Prisma Database Error [Logged on server only]:', err);
+    return sendError(
+      res,
+      'DATABASE_ERROR',
+      'A database error occurred while processing your request.',
+      500
+    );
+  }
+
+  // Fallback internal server error (never leak sensitive stack traces or file paths to client)
+  console.error('Unhandled Server Error [Logged on server only]:', err);
 
   return sendError(
     res,
     'INTERNAL_SERVER_ERROR',
-    process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+    'An unexpected internal server error occurred.',
     500
   );
 };

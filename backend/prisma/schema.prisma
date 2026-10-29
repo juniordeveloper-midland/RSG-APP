@@ -12,6 +12,18 @@ enum Role {
   manager
 }
 
+enum ClientStatus {
+  active
+  inactive
+  archived
+}
+
+enum ProjectStatus {
+  active
+  on_hold
+  completed
+}
+
 enum UserStatus {
   active
   suspended
@@ -30,8 +42,57 @@ enum AlertStatus {
   resolved
 }
 
+model Client {
+  id              String       @id @default(uuid())
+  name            String
+  code            String       @unique
+  website         String?
+  industry        String
+  client_since    String?      // stored as YYYY-MM-DD plain date
+  contact_photo   String?
+  contact_name    String
+  contact_email   String
+  contact_phone   String
+  status          ClientStatus @default(active)
+  billing_address String
+  billing_city    String
+  billing_state   String
+  billing_country String
+  billing_zip     String
+  billing_phone   String
+  billing_email   String
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  projects        Project[]
+
+  @@index([status])
+  @@map("clients")
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  client_id   String
+  name        String
+  code        String
+  start_date  String        // stored as YYYY-MM-DD plain date
+  end_date    String?       // stored as YYYY-MM-DD plain date
+  status      ProjectStatus @default(active)
+  description String?       @db.Text
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+
+  client      Client        @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  branches    Branch[]
+
+  @@index([client_id])
+  @@index([status])
+  @@map("projects")
+}
+
 model Branch {
   id               String            @id @default(uuid())
+  project_id       String            @default("00000000-0000-0000-0000-000000000002")
   name             String
   address          String?
   lat              Decimal           @db.Decimal(10, 8)
@@ -41,11 +102,13 @@ model Branch {
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
 
+  project          Project           @relation(fields: [project_id], references: [id], onDelete: Restrict)
   users            User[]
   shifts           Shift[]
   patrol_qrs       PatrolQr[]
   alerts           Alert[]
 
+  @@index([project_id])
   @@map("branches")
 }
 
@@ -280,5 +343,3 @@ model Notification {
   @@index([user_id, is_read])
   @@map("notifications")
 }
-
-

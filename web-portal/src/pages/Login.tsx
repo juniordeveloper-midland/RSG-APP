@@ -7,11 +7,28 @@ import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 
 interface LoginErrorInfo {
-  type: 'network' | 'credentials' | 'suspended' | 'general';
+  type: 'network' | 'credentials' | 'suspended' | 'server' | 'general';
   title: string;
   message: string;
   hint?: string;
 }
+
+const sanitizeErrorMessage = (msg?: string): string => {
+  if (!msg) return '';
+  if (
+    msg.toLowerCase().includes('prisma') ||
+    msg.includes(':\\') ||
+    msg.includes('dist/') ||
+    msg.includes('dist\\') ||
+    msg.includes('node_modules') ||
+    msg.includes('findUnique') ||
+    msg.includes('invocation in') ||
+    msg.includes('does not exist in the current database')
+  ) {
+    return 'A database error occurred on the server. Please contact an administrator.';
+  }
+  return msg;
+};
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
@@ -42,16 +59,19 @@ export const Login: React.FC = () => {
         err.message?.toLowerCase().includes('failed to fetch') ||
         err.message?.toLowerCase().includes('network');
 
+      // Only show "Account Suspended" for the real 403 ACCOUNT_SUSPENDED code
       const isSuspended =
-        err.status === 403 ||
         err.code === 'ACCOUNT_SUSPENDED' ||
-        err.message?.toLowerCase().includes('suspended');
+        (err.status === 403 && (err.code === 'ACCOUNT_SUSPENDED' || !err.code));
 
       const isInvalidCreds =
         err.status === 401 ||
-        err.code === 'INVALID_CREDENTIALS' ||
-        err.message?.toLowerCase().includes('invalid email') ||
-        err.message?.toLowerCase().includes('password');
+        err.code === 'INVALID_CREDENTIALS';
+
+      const isServerError =
+        err.status === 500 ||
+        err.code === 'INTERNAL_SERVER_ERROR' ||
+        err.code === 'DATABASE_ERROR';
 
       if (isNetwork) {
         setErrorInfo({
@@ -59,25 +79,39 @@ export const Login: React.FC = () => {
           title: 'Backend Unreachable (502 / Network Error)',
           message:
             'Unable to connect to the RSG Backend API. The server may not be started or is not listening on port 4000.',
-          hint: 'Ensure the backend server is running: execute "npm run dev" in the backend directory.',
+          hint: 'Ensure the backend server is running: execute "npm run dev" or "npm start" in the backend directory.',
         });
       } else if (isSuspended) {
         setErrorInfo({
           type: 'suspended',
           title: 'Account Suspended (403)',
-          message: err.message || 'This account is suspended and cannot log in. Please contact administration.',
+          message:
+            sanitizeErrorMessage(err.message) ||
+            'This account is suspended and cannot log in. Please contact administration.',
         });
       } else if (isInvalidCreds) {
         setErrorInfo({
           type: 'credentials',
           title: 'Invalid Credentials (401)',
-          message: err.message || 'Incorrect email or password. Please verify your credentials.',
+          message:
+            sanitizeErrorMessage(err.message) ||
+            'Incorrect email or password. Please verify your credentials.',
+        });
+      } else if (isServerError) {
+        setErrorInfo({
+          type: 'server',
+          title: 'Database / Server Error (500)',
+          message:
+            sanitizeErrorMessage(err.message) ||
+            'A database or internal server error occurred. Please check server logs or try again later.',
         });
       } else {
         setErrorInfo({
           type: 'general',
-          title: 'Authentication Error',
-          message: err.message || 'An unexpected error occurred during login. Please try again.',
+          title: `Authentication Error${err.status ? ` (${err.status})` : ''}`,
+          message:
+            sanitizeErrorMessage(err.message) ||
+            'An unexpected error occurred during login. Please try again.',
         });
       }
     } finally {
