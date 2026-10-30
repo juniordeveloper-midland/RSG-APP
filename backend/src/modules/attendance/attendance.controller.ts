@@ -103,6 +103,19 @@ export const getActiveEmployeesHandler = async (
   }
 };
 
+export const getCurrentAttendanceHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response | void> => {
+  try {
+    const result = await attendanceService.getCurrentAttendance(req.user!.id);
+    return sendSuccess(res, result, 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const listAttendanceHandler = async (
   req: Request,
   res: Response,

@@ -72,8 +72,34 @@ export const api = {
     try {
       // GET /me/rota -> { success, data: { rota: [...] } }. After apiFetch
       // unwraps `data` we still have { rota: [...] }, so pull the array out.
-      const res = await apiFetch<{ rota: RotaItem[] }>('/me/rota');
-      const rota = res?.rota ?? [];
+      const res = await apiFetch<{ rota: any[] }>('/me/rota');
+      const rawRota = res?.rota ?? [];
+      const rota: RotaItem[] = rawRota.map((r: any) => {
+        const startStr = r.start_date ? String(r.start_date).slice(0, 10) : '';
+        const endStr = r.end_date ? String(r.end_date).slice(0, 10) : null;
+        return {
+          id: r.id || r.assignment_id,
+          assignment_id: r.assignment_id || r.id,
+          shift_id: r.shift_id || r.shift?.id,
+          user_id: r.user_id,
+          start_date: startStr,
+          end_date: endStr,
+          excluded_dates: r.excluded_dates,
+          days_of_week: r.days_of_week,
+          shift: {
+            ...r.shift,
+            branch: r.shift?.branch
+              ? {
+                  ...r.shift.branch,
+                  lat: Number(r.shift.branch.lat),
+                  lng: Number(r.shift.branch.lng),
+                  radius_m: Number(r.shift.branch.radius_m) || 150,
+                  is_active: r.shift.branch.is_active ?? true,
+                }
+              : undefined,
+          },
+        };
+      });
       await offlineDb.setCache('my_rota', rota);
       return rota;
     } catch (err: any) {
@@ -86,6 +112,26 @@ export const api = {
   },
 
   // ---- Attendance (with offline queue fallbacks) ---------------------------
+
+  getCurrentAttendance: async (): Promise<any | null> => {
+    try {
+      const res = await apiFetch<any>('/attendance/current');
+      if (res && (res.status === 'checked_in' || res.status === 'in_progress')) {
+        await offlineDb.setCache('active_attendance', res);
+        return res;
+      }
+      await offlineDb.setCache('active_attendance', null as any);
+      return null;
+    } catch (err: any) {
+      if (err.isNetworkError) {
+        const cached = await offlineDb.getCache<any>('active_attendance');
+        if (cached && (cached.status === 'in_progress' || cached.status === 'checked_in')) {
+          return cached;
+        }
+      }
+      throw err;
+    }
+  },
 
   checkIn: async (
     payload: CheckInPayload,

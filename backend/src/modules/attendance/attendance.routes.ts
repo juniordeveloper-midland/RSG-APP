@@ -6,6 +6,7 @@ import {
   forceCheckoutHandler,
   deleteAttendanceHandler,
   getActiveEmployeesHandler,
+  getCurrentAttendanceHandler,
   listAttendanceHandler,
 } from './attendance.controller';
 import { authenticate, requireRole, branchScope } from '../../middleware/auth';
@@ -208,6 +209,23 @@ router.post('/check-out', checkOutHandler);
  *               $ref: '#/components/schemas/ApiError'
  */
 router.get('/active', branchScope(), getActiveEmployeesHandler);
+
+/**
+ * @openapi
+ * /attendance/current:
+ *   get:
+ *     tags:
+ *       - Attendance
+ *     summary: Get currently active checked-in attendance record for the logged-in employee
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Active attendance record or null if not currently checked in
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/current', getCurrentAttendanceHandler);
 
 /**
  * @openapi

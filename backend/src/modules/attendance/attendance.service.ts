@@ -627,6 +627,77 @@ export class AttendanceService {
   }
 
   /**
+   * Get the currently active checked-in attendance record for an employee.
+   */
+  async getCurrentAttendance(userId: string) {
+    const active = await prisma.attendance.findFirst({
+      where: {
+        user_id: userId,
+        status: 'checked_in',
+        check_out_at: null,
+      },
+      include: {
+        shift: {
+          include: {
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                address: true,
+                lat: true,
+                lng: true,
+                radius_m: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { check_in_at: 'desc' },
+    });
+
+    if (!active) {
+      return null;
+    }
+
+    return {
+      id: active.id,
+      shift_id: active.shift_id,
+      user_id: active.user_id,
+      check_in_at: active.check_in_at?.toISOString() || null,
+      check_out_at: active.check_out_at?.toISOString() || null,
+      status: active.status,
+      method: active.method,
+      in_lat: active.in_lat ? Number(active.in_lat) : null,
+      in_lng: active.in_lng ? Number(active.in_lng) : null,
+      accuracy_m: active.accuracy_m,
+      device_time: active.device_time?.toISOString() || null,
+      server_time: active.server_time?.toISOString() || null,
+      shift: active.shift
+        ? {
+            id: active.shift.id,
+            name: active.shift.name,
+            start_time: active.shift.start_time,
+            end_time: active.shift.end_time,
+            check_type: active.shift.check_type,
+            overtime_enabled: active.shift.overtime_enabled,
+            overtime_limit_hours: active.shift.overtime_limit_hours,
+            lunch_deduction_minutes: active.shift.lunch_deduction_minutes,
+            branch: active.shift.branch
+              ? {
+                  id: active.shift.branch.id,
+                  name: active.shift.branch.name,
+                  address: active.shift.branch.address,
+                  lat: Number(active.shift.branch.lat),
+                  lng: Number(active.shift.branch.lng),
+                  radius_m: Number(active.shift.branch.radius_m),
+                }
+              : undefined,
+          }
+        : null,
+    };
+  }
+
+  /**
    * List attendance with filters and pagination.
    */
   async listAttendance(query: ListAttendanceQuery) {

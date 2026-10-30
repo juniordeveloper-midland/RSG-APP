@@ -1,3 +1,4 @@
+import { Linking } from 'react-native';
 import * as Location from 'expo-location';
 import { Branch } from '../types/shift';
 
@@ -16,6 +17,7 @@ export interface GeofenceCheckResult {
   allowedRadiusMeters: number;
   accuracyMeters: number;
   isAccuracyAcceptable: boolean;
+  distanceMessage: string;
   errorMessage?: string;
 }
 
@@ -43,18 +45,23 @@ export class LocationServiceError extends Error {
  * Calculates Haversine distance in meters between two lat/lng coordinates.
  */
 export function calculateHaversineDistanceMeters(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
+  lat1: number | string,
+  lon1: number | string,
+  lat2: number | string,
+  lon2: number | string
 ): number {
+  const nLat1 = Number(lat1);
+  const nLon1 = Number(lon1);
+  const nLat2 = Number(lat2);
+  const nLon2 = Number(lon2);
+
   const R = 6371e3; // Earth radius in meters
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
-  const phi1 = toRad(lat1);
-  const phi2 = toRad(lat2);
-  const deltaPhi = toRad(lat2 - lat1);
-  const deltaLambda = toRad(lon2 - lon1);
+  const phi1 = toRad(nLat1);
+  const phi2 = toRad(nLat2);
+  const deltaPhi = toRad(nLat2 - nLat1);
+  const deltaLambda = toRad(nLon2 - nLon1);
 
   const a =
     Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
@@ -67,12 +74,25 @@ export function calculateHaversineDistanceMeters(
 
 export const locationService = {
   /**
+   * Open native device settings for the RSG application.
+   */
+  openSettings: async (): Promise<void> => {
+    try {
+      await Linking.openSettings();
+    } catch {
+      // Ignore fallback
+    }
+  },
+
+  /**
    * Request foreground location permission.
    */
   requestPermissions: async (): Promise<boolean> => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      return status === 'granted';
+      const current = await Location.getForegroundPermissionsAsync();
+      if (current.granted) return true;
+      const requested = await Location.requestForegroundPermissionsAsync();
+      return requested.granted;
     } catch {
       return false;
     }
@@ -95,19 +115,21 @@ export const locationService = {
   getCurrentPosition: async (
     maxAccuracyMeters: number = MAX_ALLOWED_ACCURACY_METERS
   ): Promise<LocationSnapshot> => {
-    const hasPermission = await locationService.requestPermissions();
-    if (!hasPermission) {
-      throw new LocationServiceError(
-        'PERMISSION_DENIED',
-        'Location permission is required to clock in and verify patrols. Please enable location access in settings.'
-      );
-    }
-
+    // 1. Check if device location services are turned on
     const enabled = await locationService.isLocationEnabled();
     if (!enabled) {
       throw new LocationServiceError(
         'SERVICES_DISABLED',
-        'Device location / GPS is turned off. Please turn on location services on your device.'
+        'Device location is turned off. Please enable GPS / location services on your device to check in.'
+      );
+    }
+
+    // 2. Check permission (ask if needed)
+    const hasPermission = await locationService.requestPermissions();
+    if (!hasPermission) {
+      throw new LocationServiceError(
+        'PERMISSION_DENIED',
+        'Location permission is denied. Please grant location access in device settings to verify check-in.'
       );
     }
 
@@ -122,7 +144,7 @@ export const locationService = {
       if (accuracy > maxAccuracyMeters) {
         throw new LocationServiceError(
           'POOR_ACCURACY',
-          `GPS signal is too weak (${Math.round(accuracy)}m accuracy, required ≤ ${maxAccuracyMeters}m). Please move closer to an open window or outdoors.`,
+          `Weak GPS signal (±${Math.round(accuracy)}m). High accuracy (within ${maxAccuracyMeters}m) required. Please move to an open area.`,
           { accuracy, required: maxAccuracyMeters }
         );
       }
@@ -146,29 +168,36 @@ export const locationService = {
    * Evaluate whether a location snapshot satisfies a branch geofence boundary.
    */
   checkGeofence: (location: LocationSnapshot, branch: Branch): GeofenceCheckResult => {
+    const branchLat = Number(branch.lat);
+    const branchLng = Number(branch.lng);
+    const branchRadius = Number(branch.radius_m) || 150;
+
     const distance = calculateHaversineDistanceMeters(
       location.lat,
       location.lng,
-      branch.lat,
-      branch.lng
+      branchLat,
+      branchLng
     );
 
-    const isWithin = distance <= branch.radius_m;
+    const isWithin = distance <= branchRadius;
     const isAccurate = location.accuracy_m <= MAX_ALLOWED_ACCURACY_METERS;
+
+    const distanceMessage = `You are ${distance} m from ${branch.name}, allowed ${branchRadius} m`;
 
     let errorMessage: string | undefined;
     if (!isWithin) {
-      errorMessage = `You are ${distance}m away from ${branch.name}. Clock in/out is restricted to within ${branch.radius_m}m of the branch boundary.`;
+      errorMessage = `${distanceMessage}. You are outside the designated check-in radius.`;
     } else if (!isAccurate) {
-      errorMessage = `GPS accuracy is too weak (${location.accuracy_m}m). High precision required within geofence.`;
+      errorMessage = `Weak GPS signal (±${location.accuracy_m}m). High accuracy required within geofence.`;
     }
 
     return {
       isWithinGeofence: isWithin && isAccurate,
       distanceMeters: distance,
-      allowedRadiusMeters: branch.radius_m,
+      allowedRadiusMeters: branchRadius,
       accuracyMeters: location.accuracy_m,
       isAccuracyAcceptable: isAccurate,
+      distanceMessage,
       errorMessage,
     };
   },

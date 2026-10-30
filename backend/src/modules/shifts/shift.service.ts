@@ -628,8 +628,8 @@ export class ShiftService {
    * Get employee's personal rota (upcoming and active shift assignments).
    */
   async getEmployeeRota(userId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
 
     const assignments = await prisma.shiftAssignment.findMany({
       where: {
@@ -660,23 +660,49 @@ export class ShiftService {
       },
     });
 
-    const rota = assignments.map((a) => ({
-      assignment_id: a.id,
-      start_date: a.start_date,
-      end_date: a.end_date,
-      excluded_dates: a.excluded_dates,
-      shift: {
-        id: a.shift.id,
-        name: a.shift.name,
-        start_time: a.shift.start_time,
-        end_time: a.shift.end_time,
-        check_type: a.shift.check_type,
-        overtime_enabled: a.shift.overtime_enabled,
-        overtime_limit_hours: a.shift.overtime_limit_hours,
-        lunch_deduction_minutes: a.shift.lunch_deduction_minutes,
-        branch: a.shift.branch,
-      },
-    }));
+    const rota = assignments.map((a) => {
+      const startStr =
+        a.start_date instanceof Date
+          ? a.start_date.toISOString().slice(0, 10)
+          : String(a.start_date).slice(0, 10);
+      const endStr = a.end_date
+        ? a.end_date instanceof Date
+          ? a.end_date.toISOString().slice(0, 10)
+          : String(a.end_date).slice(0, 10)
+        : null;
+
+      return {
+        id: a.id,
+        assignment_id: a.id,
+        shift_id: a.shift_id,
+        user_id: a.user_id,
+        start_date: startStr,
+        end_date: endStr,
+        excluded_dates: a.excluded_dates,
+        days_of_week: a.days_of_week,
+        shift: {
+          id: a.shift.id,
+          branch_id: a.shift.branch_id,
+          name: a.shift.name,
+          start_time: a.shift.start_time,
+          end_time: a.shift.end_time,
+          check_type: a.shift.check_type,
+          overtime_enabled: a.shift.overtime_enabled,
+          overtime_limit_hours: a.shift.overtime_limit_hours,
+          lunch_deduction_minutes: a.shift.lunch_deduction_minutes,
+          branch: a.shift.branch
+            ? {
+                id: a.shift.branch.id,
+                name: a.shift.branch.name,
+                address: a.shift.branch.address,
+                lat: Number(a.shift.branch.lat),
+                lng: Number(a.shift.branch.lng),
+                radius_m: Number(a.shift.branch.radius_m),
+              }
+            : undefined,
+        },
+      };
+    });
 
     return { rota };
   }

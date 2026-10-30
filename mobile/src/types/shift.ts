@@ -24,10 +24,12 @@ export interface Shift {
 
 export interface RotaItem {
   id: string;
+  assignment_id?: string;
   shift_id: string;
-  user_id: string;
+  user_id?: string;
   start_date: string;
-  end_date: string;
+  end_date: string | null;
   excluded_dates?: string[];
+  days_of_week?: number[] | null;
   shift: Shift;
 }

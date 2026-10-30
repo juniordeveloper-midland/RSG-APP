@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Header } from '../components/common/Header';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
+import { Button } from '../components/common/Button';
 import { theme } from '../theme';
 import { api } from '../services/api';
 import { RotaItem } from '../types/shift';
@@ -19,38 +21,44 @@ import { RotaItem } from '../types/shift';
 export const RotaScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [rotaItems, setRotaItems] = useState<RotaItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'today'>('all');
   const [isCachedData, setIsCachedData] = useState<boolean>(false);
 
   const fetchRota = async () => {
     setIsLoading(true);
+    setServerError(null);
     try {
       const data = await api.getMyRota();
       setRotaItems(data);
       setIsCachedData(false);
-    } catch {
+    } catch (err: any) {
+      setServerError(err.message || 'Failed to load shifts from server.');
       setIsCachedData(true);
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchRota();
-  }, []);
+  // Refresh when the screen opens
+  useFocusEffect(
+    useCallback(() => {
+      fetchRota();
+    }, [])
+  );
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   const filteredRota = rotaItems.filter((item) => {
+    const start = String(item.start_date || '').slice(0, 10);
+    const end = item.end_date ? String(item.end_date).slice(0, 10) : null;
+    const isExcluded = Boolean(item.excluded_dates?.includes(todayStr));
+
     if (filter === 'today') {
-      return (
-        item.start_date <= todayStr &&
-        (!item.end_date || item.end_date >= todayStr) &&
-        !item.excluded_dates?.includes(todayStr)
-      );
+      return start <= todayStr && (!end || end >= todayStr) && !isExcluded;
     }
     if (filter === 'upcoming') {
-      return item.start_date >= todayStr;
+      return !end || end >= todayStr;
     }
     return true;
   });
@@ -58,9 +66,11 @@ export const RotaScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const renderItem = ({ item }: { item: RotaItem }) => {
     const shift = item.shift;
     const branch = shift.branch;
+    const start = String(item.start_date || '').slice(0, 10);
+    const end = item.end_date ? String(item.end_date).slice(0, 10) : null;
     const isToday =
-      item.start_date <= todayStr &&
-      (!item.end_date || item.end_date >= todayStr) &&
+      start <= todayStr &&
+      (!end || end >= todayStr) &&
       !item.excluded_dates?.includes(todayStr);
 
     return (
@@ -104,7 +114,7 @@ export const RotaScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           <View style={styles.metaCell}>
             <Text style={styles.metaCellLabel}>Active Dates</Text>
             <Text style={styles.metaCellValue}>
-              {item.start_date} → {item.end_date || 'Ongoing'}
+              {start} → {end || 'Ongoing'}
             </Text>
           </View>
 
@@ -179,7 +189,18 @@ export const RotaScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {isCachedData && (
+      {/* Real Server Error Notice */}
+      {serverError && (
+        <View style={styles.errorNotice}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={18} color={theme.colors.danger} />
+          <Text style={styles.errorNoticeText}>{serverError}</Text>
+          <TouchableOpacity onPress={fetchRota} style={styles.retryBtn}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {isCachedData && !serverError && (
         <View style={styles.cachedNotice}>
           <MaterialCommunityIcons name="cloud-off-outline" size={16} color={theme.colors.warning} />
           <Text style={styles.cachedNoticeText}>
@@ -205,10 +226,16 @@ export const RotaScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           !isLoading ? (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons name="calendar-blank-outline" size={56} color={theme.colors.textDim} />
-              <Text style={styles.emptyTitle}>No Assigned Shifts</Text>
+              <Text style={styles.emptyTitle}>No shift assigned</Text>
               <Text style={styles.emptySubtitle}>
                 You currently have no shifts assigned for the selected filter.
               </Text>
+              <Button
+                title="Refresh"
+                onPress={fetchRota}
+                variant="primary"
+                style={{ marginTop: 16 }}
+              />
             </View>
           ) : undefined
         }
@@ -342,5 +369,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     paddingHorizontal: theme.spacing.xl,
+  },
+  errorNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.dangerBg,
+    paddingHorizontal: theme.spacing.base,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  errorNoticeText: {
+    flex: 1,
+    fontSize: theme.typography.fontSizes.xs,
+    color: theme.colors.danger,
+    fontWeight: '600',
+  },
+  retryBtn: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
+  },
+  retryBtnText: {
+    color: theme.colors.textOnPrimary,
+    fontSize: theme.typography.fontSizes.xs,
+    fontWeight: '700',
   },
 });
