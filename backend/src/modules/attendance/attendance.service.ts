@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
 import { AppError } from '../../middleware/errorHandler';
@@ -593,6 +593,7 @@ export class AttendanceService {
     const where: Prisma.AttendanceWhereInput = {
       status: 'checked_in',
       check_out_at: null,
+      user: { role: { not: Role.admin } },
     };
 
     if (branchId) {
@@ -704,7 +705,9 @@ export class AttendanceService {
     const { page, limit, branch_id, user_id, start_date, end_date, status } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.AttendanceWhereInput = {};
+    const where: Prisma.AttendanceWhereInput = {
+      user: { role: { not: Role.admin } },
+    };
 
     if (user_id) where.user_id = user_id;
     if (status) where.status = status;

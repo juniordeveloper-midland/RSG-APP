@@ -14,9 +14,13 @@ import {
   Menu,
   X,
   User as UserIcon,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../common/Button';
+import { Modal } from '../common/Modal';
+import { Input } from '../common/Input';
+import { api } from '../../api/client';
 import rsgLogo from '/RSG logo.png';
 
 interface NavItem {
@@ -46,6 +50,53 @@ export const AppLayout: React.FC = () => {
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleChangePassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!currentPassword) {
+      setPasswordError('Please enter your current password');
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters long');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const res = await api.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      setPasswordSuccess(res.message || 'Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setPasswordModalOpen(false);
+        setPasswordSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setPasswordError(err.message || 'Failed to change password. Please check your current password.');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -225,12 +276,31 @@ export const AppLayout: React.FC = () => {
                 {user?.name || 'Manager'}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                {user?.role === 'manager' || user?.managerial_access
+                {user?.role === 'admin'
+                  ? 'System Administrator'
+                  : user?.role === 'manager' || user?.managerial_access
                   ? 'Operations Manager'
                   : 'Supervisor'}
               </div>
             </div>
           </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            style={{ width: '100%', justifyContent: 'flex-start', marginBottom: '6px' }}
+            leftIcon={<KeyRound size={16} />}
+            onClick={() => {
+              setPasswordModalOpen(true);
+              setPasswordError(null);
+              setPasswordSuccess(null);
+              setCurrentPassword('');
+              setNewPassword('');
+              setConfirmPassword('');
+            }}
+          >
+            Change Password
+          </Button>
 
           <Button
             variant="ghost"
@@ -360,6 +430,96 @@ export const AppLayout: React.FC = () => {
           }
         }
       `}</style>
+
+      {/* Change Password Modal */}
+      <Modal
+        isOpen={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+        title="Change Account Password"
+        maxWidth="460px"
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <Button
+              variant="ghost"
+              onClick={() => setPasswordModalOpen(false)}
+              disabled={isChangingPassword}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleChangePassword}
+              isLoading={isChangingPassword}
+            >
+              Update Password
+            </Button>
+          </div>
+        }
+      >
+        <form
+          onSubmit={handleChangePassword}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
+          {passwordError && (
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'rgba(235, 5, 5, 0.12)',
+                border: '1px solid var(--color-primary)',
+                color: '#ff6b6b',
+                fontSize: '13px',
+                lineHeight: 1.4,
+              }}
+            >
+              {passwordError}
+            </div>
+          )}
+
+          {passwordSuccess && (
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                border: '1px solid #22c55e',
+                color: '#4ade80',
+                fontSize: '13px',
+                lineHeight: 1.4,
+              }}
+            >
+              {passwordSuccess}
+            </div>
+          )}
+
+          <Input
+            label="Current Password *"
+            type="password"
+            placeholder="Enter current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+          />
+
+          <Input
+            label="New Password (min 6 characters) *"
+            type="password"
+            placeholder="Enter new password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+          />
+
+          <Input
+            label="Confirm New Password *"
+            type="password"
+            placeholder="Re-enter new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+        </form>
+      </Modal>
     </div>
   );
 };

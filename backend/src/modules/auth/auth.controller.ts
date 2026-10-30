@@ -7,6 +7,7 @@ import {
   logoutSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
 } from './auth.validation';
 
 export const loginHandler = async (
@@ -86,6 +87,20 @@ export const getProfileHandler = async (
 ): Promise<Response | void> => {
   try {
     return sendSuccess(res, { user: req.user }, 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const changePasswordHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<Response | void> => {
+  try {
+    const input = changePasswordSchema.parse(req.body);
+    const result = await authService.changePassword(req.user!.id, input, req);
+    return sendSuccess(res, result, 200);
   } catch (error) {
     next(error);
   }

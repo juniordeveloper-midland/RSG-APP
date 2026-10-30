@@ -227,7 +227,11 @@ export class EmployeeService {
     if (branch_id) where.branch_id = branch_id;
     if (client_id) where.client_id = client_id;
     if (status) where.status = status;
-    if (role) where.role = role;
+    if (role && role !== Role.admin) {
+      where.role = role;
+    } else {
+      where.role = { not: Role.admin };
+    }
     if (position) where.position = { contains: position };
 
     if (search) {
@@ -273,7 +277,7 @@ export class EmployeeService {
       select: USER_SELECT_SAFE,
     });
 
-    if (!employee) {
+    if (!employee || employee.role === Role.admin) {
       throw new AppError('EMPLOYEE_NOT_FOUND', `Employee with ID '${id}' was not found`, 404);
     }
 

@@ -40,6 +40,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const data = await api.login(credentials);
+      if (data.user.role === 'employee') {
+        clearAuthSession();
+        throw {
+          status: 403,
+          code: 'FORBIDDEN',
+          message: 'This portal is for administrators only. Please use the mobile app.',
+        };
+      }
       setAuthSession(data);
       setUser(data.user);
     } finally {

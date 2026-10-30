@@ -66,12 +66,17 @@ export const authenticate = async (
  * Middleware to restrict access based on user role.
  * For role 'manager', users with role === 'manager' or managerial_access === true are permitted.
  */
-export const requireRole = (role: Role | Role[] | 'manager' | 'employee') => {
+export const requireRole = (role: Role | Role[] | 'manager' | 'employee' | 'admin') => {
   const requiredRoles = Array.isArray(role) ? role : [role];
 
   return (req: Request, res: Response, next: NextFunction): Response | void => {
     if (!req.user) {
       return sendError(res, 'UNAUTHORIZED', 'Authentication required', 401);
+    }
+
+    // Admin has full managerial access across all management routes
+    if (req.user.role === Role.admin) {
+      return next();
     }
 
     // Manager role allows either Role.manager or managerial_access flag

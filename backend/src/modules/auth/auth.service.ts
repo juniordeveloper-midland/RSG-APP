@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { Request } from 'express';
-import { UserStatus } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/errorHandler';
 import {
@@ -17,6 +17,7 @@ import {
   LoginInput,
   ForgotPasswordInput,
   ResetPasswordInput,
+  ChangePasswordInput,
 } from './auth.validation';
 
 export class AuthService {
@@ -68,6 +69,41 @@ export class AuthService {
         req,
       });
       throw new AppError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+    }
+
+    // Role vs Client validation
+    const clientType = input.client_type || (req.headers['x-client-type'] as string | undefined);
+
+    if (clientType === 'web' && user.role === Role.employee) {
+      await recordAuditLog({
+        userId: user.id,
+        action: 'LOGIN_FAILED',
+        entity: 'users',
+        entityId: user.id,
+        details: { email: input.email, reason: 'EMPLOYEE_BLOCKED_FROM_WEB' },
+        req,
+      });
+      throw new AppError(
+        'FORBIDDEN',
+        'This portal is for administrators only. Please use the mobile app.',
+        403
+      );
+    }
+
+    if (clientType === 'mobile' && user.role === Role.admin) {
+      await recordAuditLog({
+        userId: user.id,
+        action: 'LOGIN_FAILED',
+        entity: 'users',
+        entityId: user.id,
+        details: { email: input.email, reason: 'ADMIN_BLOCKED_FROM_MOBILE' },
+        req,
+      });
+      throw new AppError(
+        'FORBIDDEN',
+        'Administrators cannot log in to the mobile app.',
+        403
+      );
     }
 
     // 15-minute Access Token
@@ -328,6 +364,44 @@ export class AuthService {
     return {
       success: true,
       message: 'Password has been reset successfully. Please log in with your new password.',
+    };
+  }
+
+  /**
+   * Change password for authenticated user (verifies current password).
+   */
+  async changePassword(userId: string, input: ChangePasswordInput, req?: Request) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new AppError('USER_NOT_FOUND', 'User not found', 404);
+    }
+
+    const isMatch = await bcrypt.compare(input.current_password, user.password_hash);
+    if (!isMatch) {
+      throw new AppError('INVALID_CREDENTIALS', 'Current password is incorrect', 400);
+    }
+
+    const newPasswordHash = await bcrypt.hash(input.new_password, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password_hash: newPasswordHash },
+    });
+
+    await recordAuditLog({
+      userId: user.id,
+      action: 'PASSWORD_CHANGED',
+      entity: 'users',
+      entityId: user.id,
+      details: { email: user.email },
+      req,
+    });
+
+    return {
+      success: true,
+      message: 'Password updated successfully',
     };
   }
 }

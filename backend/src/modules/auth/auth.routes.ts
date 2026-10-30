@@ -6,6 +6,7 @@ import {
   forgotPasswordHandler,
   resetPasswordHandler,
   getProfileHandler,
+  changePasswordHandler,
 } from './auth.controller';
 import { authLimiter } from '../../middleware/rateLimiter';
 import { authenticate } from '../../middleware/auth';
@@ -274,5 +275,50 @@ router.post('/reset-password', authLimiter, resetPasswordHandler);
  *               $ref: '#/components/schemas/ApiError'
  */
 router.get('/me', authenticate, getProfileHandler);
+
+/**
+ * @openapi
+ * /auth/change-password:
+ *   post:
+ *     tags:
+ *       - Auth
+ *     summary: Change password for currently authenticated user
+ *     description: Verifies current password, encrypts new password, and updates user credentials.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - current_password
+ *               - new_password
+ *             properties:
+ *               current_password:
+ *                 type: string
+ *                 format: password
+ *               new_password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 6
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         description: Invalid or incorrect current password
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiError'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiError'
+ */
+router.post('/change-password', authenticate, changePasswordHandler);
 
 export const authRoutes = router;

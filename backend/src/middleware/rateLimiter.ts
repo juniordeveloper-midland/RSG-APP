@@ -14,7 +14,7 @@ export const globalLimiter = rateLimit({
 
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Max 10 login / reset requests per IP per window
+  max: process.env.NODE_ENV === 'development' ? 100 : 10,
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === 'test',

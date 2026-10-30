@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { Request } from 'express';
 import * as XLSX from 'xlsx';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
 import { AppError } from '../../middleware/errorHandler';
@@ -368,6 +368,7 @@ export class PatrolService {
     const targetBranchId = branchScopeId || query.branch_id;
 
     const where: Prisma.PatrolScanWhereInput = {
+      user: { role: { not: Role.admin } },
       ...(targetBranchId ? { qr: { branch_id: targetBranchId } } : {}),
       ...(query.qr_id ? { qr_id: query.qr_id } : {}),
       ...(query.user_id ? { user_id: query.user_id } : {}),
@@ -430,6 +431,7 @@ export class PatrolService {
     const targetBranchId = branchScopeId || query.branch_id;
 
     const where: Prisma.PatrolScanWhereInput = {
+      user: { role: { not: Role.admin } },
       ...(targetBranchId ? { qr: { branch_id: targetBranchId } } : {}),
       ...(query.qr_id ? { qr_id: query.qr_id } : {}),
       ...(query.user_id ? { user_id: query.user_id } : {}),

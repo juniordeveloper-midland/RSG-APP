@@ -56,7 +56,7 @@ export const Employees: React.FC = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [password, setPassword] = useState('GuardSecurePassword2026!');
+  const [password, setPassword] = useState('');
   const [address, setAddress] = useState('');
   const [documents, setDocuments] = useState<EmployeeDocumentItem[]>([]);
 
@@ -163,7 +163,7 @@ export const Employees: React.FC = () => {
     setEmail('');
     setPhone('');
     setDateOfBirth('');
-    setPassword('GuardSecurePassword2026!');
+    setPassword('');
     setAddress('');
     setDocuments([]);
     setUsername('');

@@ -97,6 +97,7 @@ apiClient.interceptors.request.use(async (config) => {
   try {
     const token = await authStorage.getAccessToken();
     const headers = config.headers as Record<string, string>;
+    headers['x-client-type'] = 'mobile';
     if (token && !headers.Authorization) {
       headers.Authorization = `Bearer ${token}`;
     }

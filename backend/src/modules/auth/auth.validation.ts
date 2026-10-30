@@ -3,9 +3,17 @@ import { z } from 'zod';
 export const loginSchema = z.object({
   email: z.string().email('A valid email address is required').toLowerCase().trim(),
   password: z.string().min(1, 'Password is required'),
+  client_type: z.enum(['web', 'mobile']).optional(),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const changePasswordSchema = z.object({
+  current_password: z.string().min(1, 'Current password is required'),
+  new_password: z.string().min(6, 'New password must be at least 6 characters long').max(100, 'Password is too long'),
+});
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required'),

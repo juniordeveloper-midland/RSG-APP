@@ -29,8 +29,13 @@ export const api = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const res = await apiFetch<AuthResponse>('/auth/login', {
       method: 'POST',
-      body: credentials,
+      body: { ...credentials, client_type: 'mobile' },
     });
+
+    if (res.user.role === 'admin') {
+      await authStorage.clearAuth();
+      throw new ApiError('Administrators cannot log in to the mobile app.', 403, 'FORBIDDEN');
+    }
 
     // Explicit field mapping (no snake_case/ camelCase mismatch).
     await authStorage.setAccessToken(res.accessToken);

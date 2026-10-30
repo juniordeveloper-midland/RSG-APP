@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import { CheckType, Prisma, Shift, ShiftAssignment, UserStatus } from '@prisma/client';
+import { CheckType, Prisma, Role, Shift, ShiftAssignment, UserStatus } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/errorHandler';
@@ -294,6 +294,7 @@ export class ShiftService {
         where: {
           branch_id: shift.branch_id,
           status: UserStatus.active,
+          role: { not: Role.admin },
         },
         select: { id: true, name: true, email: true },
       });
@@ -308,10 +309,10 @@ export class ShiftService {
     } else if (input.user_id) {
       const user = await prisma.user.findUnique({
         where: { id: input.user_id },
-        select: { id: true, name: true, email: true, status: true },
+        select: { id: true, name: true, email: true, status: true, role: true },
       });
 
-      if (!user) {
+      if (!user || user.role === Role.admin) {
         throw new AppError('EMPLOYEE_NOT_FOUND', `Employee '${input.user_id}' was not found`, 404);
       }
 

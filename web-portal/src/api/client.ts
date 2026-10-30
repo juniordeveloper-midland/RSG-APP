@@ -8,7 +8,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'manager' | 'employee';
+  role: 'admin' | 'manager' | 'employee';
   status: 'active' | 'suspended';
   branch_id?: string | null;
   managerial_access?: boolean;
@@ -242,10 +242,10 @@ export async function apiFetch<T>(
 // ─── API Surface ──────────────────────────────────────────────────────────────
 export const api = {
   // ── Auth ──────────────────────────────────────────────────────────────────
-  login: (data: { email: string; password: string }) =>
+  login: (data: { email: string; password: string; client_type?: string }) =>
     apiFetch<AuthResponse>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, client_type: 'web' }),
     }),
   logout: () => {
     const refreshToken = getRefreshToken();
@@ -254,6 +254,11 @@ export const api = {
       body: JSON.stringify({ refreshToken }),
     });
   },
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    apiFetch<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   getDashboardStats: () => apiFetch<any>('/management/dashboard'),

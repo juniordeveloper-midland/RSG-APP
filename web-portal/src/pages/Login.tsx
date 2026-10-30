@@ -60,10 +60,16 @@ export const Login: React.FC = () => {
         err.message?.toLowerCase().includes('failed to fetch') ||
         err.message?.toLowerCase().includes('network');
 
+      const isForbiddenEmployee =
+        err.status === 403 &&
+        (err.message?.toLowerCase().includes('administrators only') ||
+          err.message?.toLowerCase().includes('portal is for administrators'));
+
       // Only show "Account Suspended" for the real 403 ACCOUNT_SUSPENDED code
       const isSuspended =
-        err.code === 'ACCOUNT_SUSPENDED' ||
-        (err.status === 403 && (err.code === 'ACCOUNT_SUSPENDED' || !err.code));
+        !isForbiddenEmployee &&
+        (err.code === 'ACCOUNT_SUSPENDED' ||
+          (err.status === 403 && (err.code === 'ACCOUNT_SUSPENDED' || !err.code)));
 
       const isInvalidCreds =
         err.status === 401 ||
@@ -81,6 +87,12 @@ export const Login: React.FC = () => {
           message:
             'Unable to connect to the RSG Backend API. The server may not be started or is not listening on port 4000.',
           hint: 'Ensure the backend server is running: execute "npm run dev" or "npm start" in the backend directory.',
+        });
+      } else if (isForbiddenEmployee) {
+        setErrorInfo({
+          type: 'suspended',
+          title: 'Access Denied',
+          message: 'This portal is for administrators only. Please use the mobile app.',
         });
       } else if (isSuspended) {
         setErrorInfo({
@@ -225,9 +237,9 @@ export const Login: React.FC = () => {
             )}
 
             <Input
-              label="Manager Email"
+              label="Email Address"
               type="email"
-              placeholder="manager@region.com"
+              placeholder="name@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               leftIcon={<Mail size={16} />}
@@ -253,33 +265,6 @@ export const Login: React.FC = () => {
             >
               Sign In to Management Portal
             </Button>
-
-            <div
-              onClick={() => {
-                setEmail('manager@region.com');
-                setPassword('Manager123!');
-                setErrorInfo(null);
-              }}
-              style={{
-                padding: '12px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--color-bg-darker)',
-                border: '1px solid var(--color-border)',
-                fontSize: '12px',
-                color: 'var(--color-text-dim)',
-                lineHeight: 1.5,
-                cursor: 'pointer',
-                transition: 'border-color var(--transition-fast)',
-              }}
-              title="Click to auto-fill demo credentials"
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <strong style={{ color: 'var(--color-text-muted)' }}>Demo Credentials:</strong>
-                <span style={{ color: 'var(--color-primary-hover)', fontSize: '11px', fontWeight: 600 }}>Click to auto-fill</span>
-              </div>
-              <div>Email: <code style={{ color: 'var(--color-text)' }}>manager@region.com</code></div>
-              <div>Password: <code style={{ color: 'var(--color-text)' }}>Manager123!</code></div>
-            </div>
           </form>
         </Card>
       </div>
