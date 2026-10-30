@@ -11,6 +11,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
+    "reset:test-data": "tsx src/scripts/reset-test-data.ts",
     "test": "jest --runInBand"
   },
   "prisma": {

@@ -30,13 +30,30 @@ async function main() {
   });
   console.log(`✅ Default client seeded: ${defaultClient.name} (${defaultClient.id})`);
 
+  // 1b. Create or upsert Default Project
+  const defaultProject = await prisma.project.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000002' },
+    update: { client_id: defaultClient.id },
+    create: {
+      id: '00000000-0000-0000-0000-000000000002',
+      client_id: defaultClient.id,
+      name: 'Default Security Operations',
+      code: 'PROJ-DEF-001',
+      start_date: '2026-01-01',
+      status: 'active',
+      description: 'Default project operations',
+    },
+  });
+  console.log(`✅ Default project seeded: ${defaultProject.name} (${defaultProject.id})`);
+
   // 2. Create or upsert Branch
   const branch = await prisma.branch.upsert({
     where: { id: 'branch-hq-001' },
-    update: { client_id: defaultClient.id },
+    update: { client_id: defaultClient.id, project_id: defaultProject.id },
     create: {
       id: 'branch-hq-001',
       client_id: defaultClient.id,
+      project_id: defaultProject.id,
       name: 'RSG Central Headquarters',
       address: '100 Security Way, City Centre',
       lat: 51.5073509,
