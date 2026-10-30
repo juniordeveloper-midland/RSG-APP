@@ -18,7 +18,20 @@ export class BranchService {
    * Logs BRANCH_CREATED in audit_logs.
    */
   async createBranch(input: CreateBranchInput, managerId: string, req?: Request) {
-    const clientId = input.client_id || DEFAULT_CLIENT_ID;
+    let clientId = input.client_id;
+
+    if (!clientId) {
+      const firstClient = await prisma.client.findFirst({
+        orderBy: { created_at: 'asc' },
+      });
+      if (firstClient) {
+        clientId = firstClient.id;
+      }
+    }
+
+    if (!clientId) {
+      throw new AppError('CLIENT_NOT_FOUND', 'Client not found. Please create a client first.', 404);
+    }
 
     // Verify client exists
     const client = await prisma.client.findUnique({
@@ -26,14 +39,18 @@ export class BranchService {
     });
 
     if (!client) {
-      throw new AppError('CLIENT_NOT_FOUND', `Client with ID '${clientId}' was not found`, 404);
+      throw new AppError('CLIENT_NOT_FOUND', 'Client not found', 404);
+    }
+
+    if (input.address && input.address.length > 1000) {
+      throw new AppError('ADDRESS_TOO_LONG', 'Address is too long (maximum 1000 characters)', 400);
     }
 
     const branch = await prisma.branch.create({
       data: {
         client_id: clientId,
         name: input.name,
-        address: input.address,
+        address: input.address || null,
         lat: new Prisma.Decimal(input.lat),
         lng: new Prisma.Decimal(input.lng),
         radius_m: input.radius_m,
@@ -185,9 +202,13 @@ export class BranchService {
         where: { id: input.client_id },
       });
       if (!client) {
-        throw new AppError('CLIENT_NOT_FOUND', `Client with ID '${input.client_id}' was not found`, 404);
+        throw new AppError('CLIENT_NOT_FOUND', 'Client not found', 404);
       }
       updateData.client = { connect: { id: input.client_id } };
+    }
+
+    if (input.address && input.address.length > 1000) {
+      throw new AppError('ADDRESS_TOO_LONG', 'Address is too long (maximum 1000 characters)', 400);
     }
 
     if (input.name !== undefined) updateData.name = input.name;

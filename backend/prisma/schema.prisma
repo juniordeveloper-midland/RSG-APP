@@ -95,10 +95,10 @@ model Project {
 
 model Branch {
   id               String            @id @default(uuid())
-  client_id        String            @default("00000000-0000-0000-0000-000000000001")
-  project_id       String            @default("00000000-0000-0000-0000-000000000002")
+  client_id        String?
+  project_id       String?
   name             String
-  address          String?
+  address          String?           @db.Text
   lat              Decimal           @db.Decimal(10, 8)
   lng              Decimal           @db.Decimal(11, 8)
   radius_m         Float             @default(100)
@@ -107,8 +107,8 @@ model Branch {
   created_at       DateTime          @default(now())
   updated_at       DateTime          @updatedAt
 
-  client           Client            @relation(fields: [client_id], references: [id], onDelete: Restrict)
-  project          Project           @relation(fields: [project_id], references: [id], onDelete: Restrict)
+  client           Client?           @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  project          Project?          @relation(fields: [project_id], references: [id], onDelete: SetNull)
   users            User[]
   shifts           Shift[]
   patrol_qrs       PatrolQr[]

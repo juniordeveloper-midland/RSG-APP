@@ -2,8 +2,17 @@ import { z } from 'zod';
 
 export const createBranchSchema = z.object({
   client_id: z.string().trim().optional(),
-  name: z.string().trim().min(2, 'Branch name must be at least 2 characters').max(100),
-  address: z.string().trim().optional(),
+  name: z
+    .string({ required_error: 'Branch name is required' })
+    .trim()
+    .min(2, 'Branch name must be at least 2 characters')
+    .max(150, 'Branch name cannot exceed 150 characters'),
+  address: z
+    .string()
+    .trim()
+    .max(1000, 'Address is too long (maximum 1000 characters)')
+    .optional()
+    .nullable(),
   lat: z
     .number({ required_error: 'Latitude is required' })
     .min(-90, 'Latitude must be between -90 and 90')
@@ -20,8 +29,18 @@ export type CreateBranchInput = z.infer<typeof createBranchSchema>;
 
 export const updateBranchSchema = z.object({
   client_id: z.string().trim().optional(),
-  name: z.string().trim().min(2, 'Branch name must be at least 2 characters').max(100).optional(),
-  address: z.string().trim().optional(),
+  name: z
+    .string()
+    .trim()
+    .min(2, 'Branch name must be at least 2 characters')
+    .max(150, 'Branch name cannot exceed 150 characters')
+    .optional(),
+  address: z
+    .string()
+    .trim()
+    .max(1000, 'Address is too long (maximum 1000 characters)')
+    .optional()
+    .nullable(),
   lat: z
     .number()
     .min(-90, 'Latitude must be between -90 and 90')

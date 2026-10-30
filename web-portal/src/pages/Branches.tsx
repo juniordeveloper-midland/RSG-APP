@@ -398,13 +398,34 @@ export const Branches: React.FC = () => {
             required
           />
 
-          <Input
-            label="3. Physical Address *"
-            placeholder="e.g. 45 Deansgate, Manchester"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            required
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+              3. Physical Address *
+            </label>
+            <textarea
+              placeholder="e.g. 45 Deansgate, Manchester (supports detailed addresses up to 1000 characters)"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              maxLength={1000}
+              rows={3}
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-text)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '9px 12px',
+                fontSize: '14px',
+                outline: 'none',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+                lineHeight: 1.5,
+              }}
+              required
+            />
+            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textAlign: 'right' }}>
+              {address.length}/1000 characters
+            </div>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Input
@@ -482,12 +503,34 @@ export const Branches: React.FC = () => {
               </select>
             </div>
 
-            <Input
-              label="Address"
-              value={editBranch.address || ''}
-              onChange={(e) => setEditBranch({ ...editBranch, address: e.target.value })}
-              required
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                Physical Address *
+              </label>
+              <textarea
+                placeholder="Detailed address (up to 1000 characters)"
+                value={editBranch.address || ''}
+                onChange={(e) => setEditBranch({ ...editBranch, address: e.target.value })}
+                maxLength={1000}
+                rows={3}
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  color: 'var(--color-text)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '9px 12px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  lineHeight: 1.5,
+                }}
+                required
+              />
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textAlign: 'right' }}>
+                {(editBranch.address || '').length}/1000 characters
+              </div>
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <Input
