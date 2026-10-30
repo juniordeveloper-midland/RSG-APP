@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  Shield,
   LayoutDashboard,
   Briefcase,
   Building2,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../common/Button';
+import rsgLogo from '/RSG logo.png';
 
 interface NavItem {
   to: string;
@@ -93,21 +93,17 @@ export const AppLayout: React.FC = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
+            <img
+              src={rsgLogo}
+              alt="RSG Logo"
               style={{
                 width: '38px',
                 height: '38px',
+                objectFit: 'contain',
                 borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--color-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--color-text-on-primary)',
-                boxShadow: 'var(--shadow-glow)',
+                filter: 'drop-shadow(0 2px 6px rgba(235,5,5,0.3))',
               }}
-            >
-              <Shield size={24} />
-            </div>
+            />
             <div>
               <h1
                 style={{

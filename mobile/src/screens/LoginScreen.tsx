@@ -8,6 +8,7 @@ import {
   Platform,
   TouchableOpacity,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -138,9 +139,11 @@ export const LoginScreen: React.FC = () => {
         >
           {/* Brand Header */}
           <View style={styles.header}>
-            <View style={styles.logoBadge}>
-              <MaterialCommunityIcons name="shield-lock" size={44} color={theme.colors.textOnPrimary} />
-            </View>
+            <Image
+              source={require('../../assets/rsg-logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <Text style={styles.appName}>REGION SECURITY GUARDING</Text>
             <Text style={styles.appTagline}>Guard Patrol & Attendance Terminal</Text>
           </View>
@@ -328,19 +331,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: theme.spacing.xl,
   },
-  logoBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.primary, // #eb0505 per AGENTS.md
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 100,
+    height: 100,
     marginBottom: theme.spacing.md,
+    // subtle red glow on Android via elevation, iOS via shadow
     shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 10,
   },
   appName: {
     fontSize: theme.typography.fontSizes.xl,

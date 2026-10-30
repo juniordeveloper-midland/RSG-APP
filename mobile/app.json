@@ -5,9 +5,15 @@
     "version": "1.0.0",
     "sdkVersion": "58.0.0",
     "orientation": "portrait",
+    "icon": "./assets/rsg-logo.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#333333",
     "primaryColor": "#eb0505",
+    "splash": {
+      "image": "./assets/rsg-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#333333"
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -18,6 +24,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/rsg-logo.png",
         "backgroundColor": "#333333"
       },
       "permissions": [

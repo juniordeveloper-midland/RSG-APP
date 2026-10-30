@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, AlertCircle, WifiOff } from 'lucide-react';
+import { Lock, Mail, AlertCircle, WifiOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import rsgLogo from '/RSG logo.png';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
@@ -137,19 +138,23 @@ export const Login: React.FC = () => {
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div
             style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: 'var(--radius-lg)',
-              backgroundColor: 'var(--color-primary)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--color-text-on-primary)',
-              boxShadow: 'var(--shadow-glow)',
               marginBottom: '16px',
             }}
           >
-            <Shield size={32} />
+            <img
+              src={rsgLogo}
+              alt="RSG Logo"
+              style={{
+                width: '96px',
+                height: '96px',
+                objectFit: 'contain',
+                borderRadius: 'var(--radius-lg)',
+                filter: 'drop-shadow(0 4px 16px rgba(235,5,5,0.35))',
+              }}
+            />
           </div>
           <h1
             style={{
