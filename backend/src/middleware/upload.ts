@@ -91,3 +91,52 @@ export const clientPhotoUpload = multer({
   },
   fileFilter: clientFileFilter,
 });
+
+// ─── Employee Document Upload (PDF, JPG, PNG up to 5MB each) ─────────────────
+const docUploadDir = path.resolve(__dirname, '../../uploads/employees/documents');
+if (!fs.existsSync(docUploadDir)) {
+  fs.mkdirSync(docUploadDir, { recursive: true });
+}
+
+const docStorage = multer.diskStorage({
+  destination: (_req: Request, _file: Express.Multer.File, cb) => {
+    cb(null, docUploadDir);
+  },
+  filename: (_req: Request, file: Express.Multer.File, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const sanitizedBase = path
+      .basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .slice(0, 50);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `doc-${sanitizedBase}-${uniqueSuffix}${ext}`);
+  },
+});
+
+const docFileFilter = (
+  _req: Request,
+  file: Express.Multer.File,
+  cb: FileFilterCallback
+) => {
+  const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      new AppError(
+        'INVALID_FILE_TYPE',
+        'Only PDF, JPG, and PNG documents up to 5 MB each are allowed',
+        400
+      )
+    );
+  }
+};
+
+export const employeeDocumentUpload = multer({
+  storage: docStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: docFileFilter,
+});
+

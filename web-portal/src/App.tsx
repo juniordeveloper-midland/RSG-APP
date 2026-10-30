@@ -10,6 +10,7 @@ import { Clients } from './pages/Clients';
 import { ClientDetails } from './pages/ClientDetails';
 import { Branches } from './pages/Branches';
 import { Employees } from './pages/Employees';
+import { EmployeeDetails } from './pages/EmployeeDetails';
 import { Shifts } from './pages/Shifts';
 import { Attendance } from './pages/Attendance';
 import { Patrol } from './pages/Patrol';
@@ -88,6 +89,7 @@ export const App: React.FC = () => {
                 <Route path="clients/:id" element={<ErrorBoundary><ClientDetails /></ErrorBoundary>} />
                 <Route path="branches" element={<ErrorBoundary><Branches /></ErrorBoundary>} />
                 <Route path="employees" element={<ErrorBoundary><Employees /></ErrorBoundary>} />
+                <Route path="employees/:id" element={<ErrorBoundary><EmployeeDetails /></ErrorBoundary>} />
                 <Route path="shifts" element={<ErrorBoundary><Shifts /></ErrorBoundary>} />
                 <Route path="attendance" element={<ErrorBoundary><Attendance /></ErrorBoundary>} />
                 <Route path="patrol" element={<ErrorBoundary><Patrol /></ErrorBoundary>} />

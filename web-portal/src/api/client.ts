@@ -344,6 +344,7 @@ export const api = {
     if (params?.search) q.set('search', params.search);
     return apiFetch<any>(`/employees?${q}`);
   },
+  getEmployee: (id: string) => apiFetch<any>(`/employees/${id}`),
   createEmployee: (data: any) =>
     apiFetch<any>('/employees', {
       method: 'POST',
@@ -353,6 +354,26 @@ export const api = {
     apiFetch<any>(`/employees/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    }),
+  uploadEmployeePhoto: (file: File) => {
+    const fd = new FormData();
+    fd.append('photo', file);
+    return apiFetch<{ photo_url: string }>('/employees/upload-photo', {
+      method: 'POST',
+      body: fd,
+    });
+  },
+  uploadEmployeeDocument: (file: File) => {
+    const fd = new FormData();
+    fd.append('documents', file);
+    return apiFetch<{ documents: Array<{ name: string; file_name: string; file_url: string; file_type: string; file_size: number }> }>('/employees/upload-document', {
+      method: 'POST',
+      body: fd,
+    });
+  },
+  deleteEmployeeDocument: (employeeId: string, documentId: string) =>
+    apiFetch<any>(`/employees/${employeeId}/documents/${documentId}`, {
+      method: 'DELETE',
     }),
   updateEmployeeStatus: (id: string, status: 'active' | 'suspended') =>
     apiFetch<any>(`/employees/${id}/status`, {

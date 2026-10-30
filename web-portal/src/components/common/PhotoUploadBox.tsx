@@ -9,6 +9,7 @@ export interface PhotoUploadBoxProps {
   onPhotoChange: (url: string | null) => void;
   error?: string | null;
   onErrorChange?: (err: string | null) => void;
+  uploadFn?: (file: File) => Promise<{ photo_url: string }>;
 }
 
 export const PhotoUploadBox: React.FC<PhotoUploadBoxProps> = ({
@@ -17,6 +18,7 @@ export const PhotoUploadBox: React.FC<PhotoUploadBoxProps> = ({
   onPhotoChange,
   error: externalError,
   onErrorChange,
+  uploadFn,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(photoUrl || null);
@@ -70,7 +72,7 @@ export const PhotoUploadBox: React.FC<PhotoUploadBoxProps> = ({
       setPreview(objectUrl);
 
       // Upload to server
-      const res = await api.uploadClientPhoto(file);
+      const res = uploadFn ? await uploadFn(file) : await api.uploadClientPhoto(file);
       if (res?.photo_url) {
         onPhotoChange(res.photo_url);
         setPreview(res.photo_url);

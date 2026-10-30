@@ -532,6 +532,7 @@ export const Clients: React.FC = () => {
                     flexDirection: 'column',
                     gap: '6px',
                     fontSize: '13px',
+                    marginTop: '10px',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)' }}>

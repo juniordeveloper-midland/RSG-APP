@@ -67,6 +67,7 @@ model Client {
 
   branches        Branch[]
   projects        Project[]
+  users           User[]
 
   @@index([status])
   @@map("clients")
@@ -121,17 +122,25 @@ model Branch {
 model User {
   id                   String            @id @default(uuid())
   branch_id            String?
+  client_id            String?
   name                 String
   email                String            @unique
   username             String?           @unique
   phone                String?
   address              String?
+  date_of_birth        String?           // plain date YYYY-MM-DD
   photo_url            String?
+  position             String?
   password_hash        String
   role                 Role              @default(employee)
   status               UserStatus        @default(active)
   hourly_rate          Decimal?          @db.Decimal(10, 2)
   monthly_hours        Float?
+  weekly_hours         Float?
+  joining_date         String?           // plain date YYYY-MM-DD
+  brp_expiry_date      String?           // plain date YYYY-MM-DD
+  licence_expiry_date  String?           // plain date YYYY-MM-DD
+  licence_number       String?
   id_number            String?
   restrict_early_start Boolean           @default(false)
   auto_checkout        Boolean           @default(false)
@@ -139,7 +148,9 @@ model User {
   created_at           DateTime          @default(now())
   updated_at           DateTime          @updatedAt
 
+  client               Client?           @relation(fields: [client_id], references: [id], onDelete: SetNull)
   branch               Branch?           @relation(fields: [branch_id], references: [id], onDelete: SetNull)
+  documents            EmployeeDocument[]
   shift_assignments    ShiftAssignment[]
   attendance_records   Attendance[]
   patrol_scans         PatrolScan[]
@@ -149,9 +160,26 @@ model User {
   password_resets      PasswordReset[]
   notifications        Notification[]
 
+  @@index([client_id])
   @@index([branch_id])
   @@index([role, status])
   @@map("users")
+}
+
+model EmployeeDocument {
+  id         String   @id @default(uuid())
+  user_id    String
+  name       String
+  file_url   String
+  file_type  String?
+  file_size  Int?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("employee_documents")
 }
 
 model Shift {
