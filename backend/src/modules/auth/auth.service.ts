@@ -27,10 +27,24 @@ export class AuthService {
    * Rejects suspended accounts with 403 ACCOUNT_SUSPENDED.
    */
   async login(input: LoginInput, req: Request) {
-    const user = await prisma.user.findUnique({
-      where: { email: input.email },
+    const cleanEmail = (input.email || '').trim().toLowerCase().replace(/\s+/g, '');
+    let user = await prisma.user.findFirst({
+      where: { email: cleanEmail },
       include: { branch: true },
     });
+
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { email: cleanEmail },
+            { email: input.email },
+            { email: input.email.trim() },
+          ],
+        },
+        include: { branch: true },
+      });
+    }
 
     if (!user) {
       await recordAuditLog({
@@ -58,7 +72,9 @@ export class AuthService {
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(input.password, user.password_hash);
+    const isPasswordValid =
+      (await bcrypt.compare(input.password, user.password_hash)) ||
+      (await bcrypt.compare(input.password.trim(), user.password_hash));
     if (!isPasswordValid) {
       await recordAuditLog({
         userId: user.id,

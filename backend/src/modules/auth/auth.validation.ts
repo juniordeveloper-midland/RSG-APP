@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
-  email: z.string().email('A valid email address is required').toLowerCase().trim(),
+  email: z
+    .string({ required_error: 'A valid email address is required' })
+    .transform((val) => val.trim().toLowerCase().replace(/\s+/g, ''))
+    .pipe(z.string().email('A valid email address is required')),
   password: z.string().min(1, 'Password is required'),
   client_type: z.enum(['web', 'mobile']).optional(),
 });
@@ -28,7 +31,10 @@ export const logoutSchema = z.object({
 export type LogoutInput = z.infer<typeof logoutSchema>;
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email('A valid email address is required').toLowerCase().trim(),
+  email: z
+    .string({ required_error: 'A valid email address is required' })
+    .transform((val) => val.trim().toLowerCase().replace(/\s+/g, ''))
+    .pipe(z.string().email('A valid email address is required')),
 });
 
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;

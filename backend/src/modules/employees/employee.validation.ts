@@ -21,9 +21,8 @@ export const createEmployeeSchema = z
       .max(100),
     email: z
       .string({ required_error: 'Email is required' })
-      .email('Valid email address is required')
-      .toLowerCase()
-      .trim(),
+      .transform((val) => val.trim().toLowerCase().replace(/\s+/g, ''))
+      .pipe(z.string().email('Valid email address is required')),
     phone: z
       .string({ required_error: 'Phone number is required' })
       .trim()
@@ -31,7 +30,8 @@ export const createEmployeeSchema = z
     date_of_birth: z.string().trim().optional().nullable(),
     password: z
       .string({ required_error: 'Password is required' })
-      .min(8, 'Password must be at least 8 characters'),
+      .transform((val) => val.trim())
+      .pipe(z.string().min(8, 'Password must be at least 8 characters')),
     address: z.string().trim().optional().nullable(),
     photo_url: z.string().trim().optional().nullable(),
     profile_image: z.string().trim().optional().nullable(),
@@ -99,9 +99,17 @@ export const updateEmployeeSchema = z.object({
   // Personal fields
   name: z.string().trim().min(4, 'Name must be at least 4 characters').optional(),
   phone: z.string().trim().min(5).optional(),
-  email: z.string().email('Valid email address is required').toLowerCase().trim().optional(),
+  email: z
+    .string()
+    .transform((val) => val.trim().toLowerCase().replace(/\s+/g, ''))
+    .pipe(z.string().email('Valid email address is required'))
+    .optional(),
   date_of_birth: z.string().trim().optional().nullable(),
-  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  password: z
+    .string()
+    .transform((val) => val.trim())
+    .pipe(z.string().min(8, 'Password must be at least 8 characters'))
+    .optional(),
   address: z.string().trim().optional().nullable(),
   photo_url: z.string().trim().optional().nullable(),
   profile_image: z.string().trim().optional().nullable(),
