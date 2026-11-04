@@ -673,6 +673,7 @@ export class AttendanceService {
       accuracy_m: active.accuracy_m,
       device_time: active.device_time?.toISOString() || null,
       server_time: active.server_time?.toISOString() || null,
+      created_at: active.created_at?.toISOString() || null,
       shift: active.shift
         ? {
             id: active.shift.id,

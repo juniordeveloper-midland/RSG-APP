@@ -20,6 +20,7 @@ import { Badge } from '../components/common/Badge';
 import { Header } from '../components/common/Header';
 import { api } from '../services/api';
 import { offlineDb } from '../services/database';
+import { authStorage } from '../services/storage';
 import {
   locationService,
   LocationSnapshot,
@@ -67,15 +68,29 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         }
 
         if (activeAtt && (activeAtt.status === 'checked_in' || activeAtt.status === 'in_progress')) {
-          setCurrentAttendance(activeAtt);
+          const rawDeviceMoment =
+            activeAtt.device_time ||
+            activeAtt.created_at ||
+            activeAtt.server_time ||
+            activeAtt.check_in_time ||
+            activeAtt.check_in_at;
+
+          const normalizedAtt = {
+            ...activeAtt,
+            device_time: rawDeviceMoment,
+            check_in_at: rawDeviceMoment,
+          };
+          setCurrentAttendance(normalizedAtt);
           setIsClockedIn(true);
-            if (activeAtt.shift) {
-              setActiveShift(activeAtt.shift);
-            }
-          } else {
-            setCurrentAttendance(null);
-            setIsClockedIn(false);
+          if (activeAtt.shift) {
+            setActiveShift(activeAtt.shift);
           }
+        } else {
+          setCurrentAttendance(null);
+          setIsClockedIn(false);
+          setElapsedSeconds(0);
+          await authStorage.clearDutyStartTime();
+        }
 
           // Step B: Fetch assigned rota from server
           const rota = await api.getMyRota();
@@ -153,34 +168,63 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         }, [user])
       );
 
-      // 3. Live timer tick from real server check-in time, ticking every second
+      // 3. Live timer — ticks every second anchored to the real clock-in moment.
+      // Persisted to SecureStore so it survives closing/reopening the app.
       useEffect(() => {
           if (timerRef.current) {
             clearInterval(timerRef.current);
             timerRef.current = null;
           }
 
-          const checkInIso =
-            currentAttendance?.check_in_at ||
-            currentAttendance?.check_in_time ||
-            currentAttendance?.device_time;
-
-          if (isClockedIn && checkInIso) {
-            const updateTimer = () => {
-              const startMs = new Date(checkInIso).getTime();
-              if (!isNaN(startMs)) {
-                const diff = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-                setElapsedSeconds(diff);
-              }
-            };
-
-            updateTimer();
-            timerRef.current = setInterval(updateTimer, 1000);
-          } else {
+          if (!isClockedIn) {
             setElapsedSeconds(0);
+            return;
           }
 
+          let isCancelled = false;
+
+          const startLiveTimer = async () => {
+            const now = Date.now();
+            let startMs = await authStorage.getDutyStartTime();
+
+            const checkInIso =
+              currentAttendance?.device_time ||
+              (currentAttendance as any)?.created_at ||
+              currentAttendance?.server_time ||
+              currentAttendance?.check_in_time ||
+              currentAttendance?.check_in_at;
+
+            if (!startMs && checkInIso) {
+              const parsed = new Date(checkInIso).getTime();
+              if (!isNaN(parsed)) {
+                // If timestamp is rounded into the future (by backend 5-min rule),
+                // clamp it to now so the timer starts immediately instead of staying at 00:00:00!
+                startMs = parsed > now ? now : parsed;
+                await authStorage.setDutyStartTime(startMs);
+              }
+            }
+
+            if (!startMs || startMs > now) {
+              startMs = now;
+              await authStorage.setDutyStartTime(startMs);
+            }
+
+            if (isCancelled) return;
+
+            const tick = () => {
+              const diffMs = Date.now() - startMs!;
+              setElapsedSeconds(diffMs > 0 ? Math.floor(diffMs / 1000) : 0);
+            };
+
+            tick(); // paint immediately
+            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current = setInterval(tick, 1000);
+          };
+
+          startLiveTimer();
+
           return () => {
+            isCancelled = true;
             if (timerRef.current) {
               clearInterval(timerRef.current);
               timerRef.current = null;
@@ -188,9 +232,9 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           };
     }, [
       isClockedIn,
-      currentAttendance?.check_in_at,
-      currentAttendance?.check_in_time,
+      currentAttendance?.id,
       currentAttendance?.device_time,
+      currentAttendance?.check_in_at,
     ]);
 
     const onRefresh = async () => {
@@ -270,11 +314,18 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
               const fullRecord = {
                 ...recordData,
-                check_in_at: recordData.check_in_at || recordData.check_in_time || loc.device_time,
+                // device_time is the real press moment; check_in_at is rounded
+                // up to 5 min by the backend and can be in the future — always
+                // prefer device_time so the timer starts counting immediately.
+                device_time: recordData.device_time || loc.device_time,
+                check_in_at: recordData.device_time || recordData.check_in_time || recordData.check_in_at || loc.device_time,
                 shift: recordData.shift || targetShift,
               };
 
               // Update the screen straight away
+              const nowMs = Date.now();
+              await authStorage.setDutyStartTime(nowMs);
+              setElapsedSeconds(0);
               setCurrentAttendance(fullRecord);
               setIsClockedIn(true);
 
@@ -301,6 +352,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               });
 
               // Update the screen straight away
+              await authStorage.clearDutyStartTime();
               setIsClockedIn(false);
               setCurrentAttendance(null);
               setElapsedSeconds(0);
@@ -332,11 +384,31 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               try {
                 const active = await api.getCurrentAttendance();
                 if (active) {
-                  setCurrentAttendance(active);
+                  const rawDeviceMoment =
+                    active.device_time ||
+                    active.created_at ||
+                    active.server_time ||
+                    active.check_in_time ||
+                    active.check_in_at;
+
+                  const normalizedActive = {
+                    ...active,
+                    device_time: rawDeviceMoment,
+                    check_in_at: rawDeviceMoment,
+                  };
+                  setCurrentAttendance(normalizedActive);
                   setIsClockedIn(true);
                   if (active.shift) {
                     setActiveShift(active.shift);
                   }
+
+                  const nowEpoch = Date.now();
+                  const stored = await authStorage.getDutyStartTime();
+                  if (!stored) {
+                    const parsed = rawDeviceMoment ? new Date(rawDeviceMoment).getTime() : nowEpoch;
+                    await authStorage.setDutyStartTime(parsed > nowEpoch ? nowEpoch : parsed);
+                  }
+
                   const timeStr = active.check_in_at
                     ? new Date(active.check_in_at).toLocaleTimeString([], {
                       hour: '2-digit',
@@ -390,7 +462,11 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         const branch = activeShift?.branch || user?.branch;
         const todayStr = new Date().toISOString().slice(0, 10);
         const checkInTimestamp =
-          currentAttendance?.check_in_at || currentAttendance?.check_in_time;
+          currentAttendance?.device_time ||
+          (currentAttendance as any)?.created_at ||
+          currentAttendance?.server_time ||
+          currentAttendance?.check_in_time ||
+          currentAttendance?.check_in_at;
 
         return (
           <SafeAreaView style={styles.safeArea}>
@@ -531,9 +607,31 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     {/* Live Timer Section */}
                     <View style={styles.timerContainer}>
                       <Text style={styles.timerLabel}>
-                        {isClockedIn ? 'ON-DUTY DURATION (UTC)' : 'DUTY TIMER'}
+                        {isClockedIn ? 'ON-DUTY DURATION' : 'DUTY TIMER'}
                       </Text>
-                      <Text style={styles.timerText}>{formatTimer(elapsedSeconds)}</Text>
+                      <Text
+                        style={[
+                          styles.timerText,
+                          isClockedIn && { color: theme.colors.success },
+                        ]}
+                      >
+                        {formatTimer(elapsedSeconds)}
+                      </Text>
+                      {isClockedIn && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <View
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: 4,
+                              backgroundColor: theme.colors.success,
+                            }}
+                          />
+                          <Text style={{ fontSize: theme.typography.fontSizes.xs, color: theme.colors.success }}>
+                            Live
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </Card>
                   ) : !serverError ? (
@@ -839,6 +937,8 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           alignItems: 'center',
           borderWidth: 1,
           borderColor: theme.colors.border,
+          marginTop: theme.spacing.md,
+          marginBottom: theme.spacing.sm,
         },
         timerLabel: {
           fontSize: theme.typography.fontSizes.xs,
@@ -852,7 +952,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           fontWeight: '900',
           color: theme.colors.text,
           fontVariant: ['tabular-nums'],
-          letterSpacing: 1,
+          letterSpacing: 2,
         },
         gpsCard: {
           marginBottom: theme.spacing.xl,

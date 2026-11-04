@@ -8,6 +8,7 @@ const REFRESH_TOKEN_KEY = 'rsg_mobile_refresh_token';
 const USER_KEY = 'rsg_mobile_user';
 const BIOMETRICS_KEY = 'rsg_mobile_biometrics_enabled';
 const SERVER_URL_KEY = 'rsg_mobile_server_url';
+const DUTY_START_KEY = 'rsg_mobile_duty_start_ms';
 
 // Default backend host. Driven by EXPO_PUBLIC_API_URL via config (with a
 // platform-aware fallback), so the env var stays the single source of truth.
@@ -85,7 +86,17 @@ export const authStorage = {
     await deleteItem(ACCESS_TOKEN_KEY);
     await deleteItem(REFRESH_TOKEN_KEY);
     await deleteItem(USER_KEY);
+    await deleteItem(DUTY_START_KEY);
   },
+
+  getDutyStartTime: async (): Promise<number | null> => {
+    const raw = await getItem(DUTY_START_KEY);
+    if (!raw) return null;
+    const n = Number(raw);
+    return isNaN(n) ? null : n;
+  },
+  setDutyStartTime: (ms: number) => setItem(DUTY_START_KEY, String(ms)),
+  clearDutyStartTime: () => deleteItem(DUTY_START_KEY),
 
   isBiometricsEnabled: async (): Promise<boolean> => {
     const val = await getItem(BIOMETRICS_KEY);
