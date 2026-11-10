@@ -180,10 +180,10 @@ export const LiveMap: React.FC = () => {
           scrollWheelZoom={true}
           style={{ width: '100%', height: '100%', backgroundColor: '#262626' }}
         >
-          {/* CartoDB Dark Matter tiles */}
+          {/* OpenStreetMap tiles — free, no API key required */}
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
           {/* Render Branches with Geofence Rings */}
