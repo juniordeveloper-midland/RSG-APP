@@ -9,6 +9,7 @@ import { Table } from '../components/common/Table';
 import type { Column } from '../components/common/Table';
 import { Modal } from '../components/common/Modal';
 import { ErrorBanner } from '../components/common/ErrorBanner';
+import { LocationPickerMap } from '../components/common/LocationPickerMap';
 
 export const Branches: React.FC = () => {
   const queryClient = useQueryClient();
@@ -22,8 +23,8 @@ export const Branches: React.FC = () => {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
-  const [lat, setLat] = useState('51.5074');
-  const [lng, setLng] = useState('-0.1278');
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
   const [radiusM, setRadiusM] = useState('150');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -64,6 +65,9 @@ export const Branches: React.FC = () => {
       setCreateModalOpen(false);
       setName('');
       setAddress('');
+      setLat('');
+      setLng('');
+      setRadiusM('150');
       setFormError(null);
     },
     onError: (err: any) => setFormError(err.message),
@@ -92,12 +96,14 @@ export const Branches: React.FC = () => {
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    const latNum = lat !== '' ? Number(lat) : undefined;
+    const lngNum = lng !== '' ? Number(lng) : undefined;
     createMutation.mutate({
       client_id: selectedClientId || undefined,
       name,
       address,
-      lat: Number(lat),
-      lng: Number(lng),
+      lat: latNum,
+      lng: lngNum,
       radius_m: Number(radiusM),
       is_active: true,
     });
@@ -343,6 +349,7 @@ export const Branches: React.FC = () => {
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         title="Establish New Branch / Site"
+        maxWidth="640px"
       >
         <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {formError && (
@@ -427,33 +434,70 @@ export const Branches: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Input
-              label="Latitude Pin *"
-              type="number"
-              step="any"
-              value={lat}
-              onChange={(e) => setLat(e.target.value)}
-              required
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+              4. Pin Location on Map
+              <span style={{ fontSize: '11px', fontWeight: 400, marginLeft: '6px', color: 'var(--color-text-dim)' }}>
+                (optional — click map or drag pin)
+              </span>
+            </label>
+            <LocationPickerMap
+              lat={lat !== '' ? Number(lat) : 0}
+              lng={lng !== '' ? Number(lng) : 0}
+              radiusM={Number(radiusM) || 150}
+              onPositionChange={(newLat, newLng) => {
+                setLat(newLat.toFixed(6));
+                setLng(newLng.toFixed(6));
+              }}
+              height="220px"
             />
-            <Input
-              label="Longitude Pin *"
-              type="number"
-              step="any"
-              value={lng}
-              onChange={(e) => setLng(e.target.value)}
-              required
-            />
+            {/* Read-only coordinate display */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--color-text-dim)' }}>Latitude</label>
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-bg-darker)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '7px 10px',
+                    fontSize: '13px',
+                    fontFamily: 'monospace',
+                    color: lat !== '' ? 'var(--color-text)' : 'var(--color-text-dim)',
+                    minHeight: '34px',
+                  }}
+                >
+                  {lat !== '' ? lat : '—'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--color-text-dim)' }}>Longitude</label>
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-bg-darker)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '7px 10px',
+                    fontSize: '13px',
+                    fontFamily: 'monospace',
+                    color: lng !== '' ? 'var(--color-text)' : 'var(--color-text-dim)',
+                    minHeight: '34px',
+                  }}
+                >
+                  {lng !== '' ? lng : '—'}
+                </div>
+              </div>
+            </div>
           </div>
 
           <Input
-            label="Geofence Radius (meters) *"
+            label="5. Geofence Radius (meters) *"
             type="number"
             min="10"
             max="10000"
             value={radiusM}
             onChange={(e) => setRadiusM(e.target.value)}
-            helperText="Guards must check in within this perimeter radius."
+            helperText="Guards must check in within this perimeter radius. The circle on the map updates live."
             required
           />
 
@@ -473,6 +517,7 @@ export const Branches: React.FC = () => {
         isOpen={!!editBranch}
         onClose={() => setEditBranch(null)}
         title={`Edit Branch: ${editBranch?.name}`}
+        maxWidth="640px"
       >
         {editBranch && (
           <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -532,30 +577,67 @@ export const Branches: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Input
-                label="Latitude"
-                type="number"
-                step="any"
-                value={editBranch.lat}
-                onChange={(e) => setEditBranch({ ...editBranch, lat: e.target.value })}
-                required
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                Pin Location on Map
+                <span style={{ fontSize: '11px', fontWeight: 400, marginLeft: '6px', color: 'var(--color-text-dim)' }}>
+                  (drag pin or click to reposition)
+                </span>
+              </label>
+              <LocationPickerMap
+                lat={editBranch.lat ? Number(editBranch.lat) : 0}
+                lng={editBranch.lng ? Number(editBranch.lng) : 0}
+                radiusM={Number(editBranch.radius_m) || 150}
+                onPositionChange={(newLat, newLng) =>
+                  setEditBranch({ ...editBranch, lat: newLat.toFixed(6), lng: newLng.toFixed(6) })
+                }
+                height="220px"
               />
-              <Input
-                label="Longitude"
-                type="number"
-                step="any"
-                value={editBranch.lng}
-                onChange={(e) => setEditBranch({ ...editBranch, lng: e.target.value })}
-                required
-              />
+              {/* Read-only coordinate display */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--color-text-dim)' }}>Latitude</label>
+                  <div
+                    style={{
+                      backgroundColor: 'var(--color-bg-darker)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '7px 10px',
+                      fontSize: '13px',
+                      fontFamily: 'monospace',
+                      color: editBranch.lat ? 'var(--color-text)' : 'var(--color-text-dim)',
+                      minHeight: '34px',
+                    }}
+                  >
+                    {editBranch.lat ? Number(editBranch.lat).toFixed(6) : '—'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--color-text-dim)' }}>Longitude</label>
+                  <div
+                    style={{
+                      backgroundColor: 'var(--color-bg-darker)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '7px 10px',
+                      fontSize: '13px',
+                      fontFamily: 'monospace',
+                      color: editBranch.lng ? 'var(--color-text)' : 'var(--color-text-dim)',
+                      minHeight: '34px',
+                    }}
+                  >
+                    {editBranch.lng ? Number(editBranch.lng).toFixed(6) : '—'}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <Input
-              label="Radius (m)"
+              label="Geofence Radius (m)"
               type="number"
               value={editBranch.radius_m}
               onChange={(e) => setEditBranch({ ...editBranch, radius_m: e.target.value })}
+              helperText="The geofence circle on the map updates as you type."
               required
             />
 
