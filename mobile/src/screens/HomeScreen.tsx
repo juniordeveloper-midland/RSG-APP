@@ -31,6 +31,7 @@ import {
 import { generateRequestId } from '../utils/uuid';
 import { Shift, RotaItem, Branch } from '../types/shift';
 import { AttendanceRecord } from '../types/attendance';
+import AttendanceSelfieScanner from '../components/attendance/AttendanceSelfieScanner';
 
 export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user } = useAuth();
@@ -44,6 +45,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [isAttendancePending, setIsAttendancePending] = useState<boolean>(false);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isActionLoading, setIsActionLoading] = useState<boolean>(false);
+  const [showScanner, setShowScanner] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // Live Location State
@@ -268,6 +270,12 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           return;
         }
 
+        // Clock In flow: Launch modular Selfie Geo-Attendance Scanner
+        if (!isClockedIn) {
+          setShowScanner(true);
+          return;
+        }
+
         setIsActionLoading(true);
 
         try {
@@ -457,6 +465,70 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           } finally {
             setIsActionLoading(false);
           }
+        };
+
+        // Callbacks for AttendanceSelfieScanner (Modular Plug & Play Isolation)
+        const handleAttendanceSuccess = async (scannerData: any) => {
+          setShowScanner(false);
+          setIsActionLoading(true);
+
+          const targetShift = activeShift || (currentAttendance as any)?.shift;
+          const targetShiftId = targetShift?.id || currentAttendance?.shift_id;
+
+          try {
+            const requestId = generateRequestId();
+
+            // Submit check-in with verified geotagged coordinates & timestamp
+            const result = await api.checkIn({
+              shift_id: targetShiftId!,
+              lat: scannerData.latitude,
+              lng: scannerData.longitude,
+              accuracy_m: scannerData.accuracy || 10,
+              device_time: scannerData.timestamp || new Date().toISOString(),
+              method: 'gps',
+              request_id: requestId,
+            });
+
+            const recordData: any =
+              'data' in result ? (result.data as Partial<AttendanceRecord>) : result;
+
+            const fullRecord = {
+              ...recordData,
+              device_time: recordData.device_time || scannerData.timestamp,
+              check_in_at: recordData.device_time || recordData.check_in_time || recordData.check_in_at || scannerData.timestamp,
+              shift: recordData.shift || targetShift,
+            };
+
+            const nowMs = Date.now();
+            await authStorage.setDutyStartTime(nowMs);
+            setElapsedSeconds(0);
+            setCurrentAttendance(fullRecord);
+            setIsClockedIn(true);
+
+            if ('isOffline' in result && result.isOffline) {
+              setIsAttendancePending(true);
+              Alert.alert(
+                'Clock-In Saved Offline',
+                'No connection to RSG server. Your selfie geo-attendance has been saved securely to the offline queue with UTC timestamp and will sync once connection resumes.'
+              );
+            } else {
+              setIsAttendancePending(false);
+              Alert.alert('Shift Started', `Selfie & GPS verified. Clocked into ${targetShift?.name || 'shift'} successfully.`);
+            }
+          } catch (err: any) {
+            Alert.alert('Attendance Error', err?.message || 'Failed to submit attendance');
+          } finally {
+            setIsActionLoading(false);
+          }
+        };
+
+        const handleAttendanceFailure = (error: { code: string; message: string }) => {
+          console.warn('[HomeScreen] Selfie Geo-Scanner failed:', error);
+          Alert.alert('Attendance Verification Failed', error?.message || 'Liveness or GPS verification failed.');
+        };
+
+        const handleAttendanceCancel = () => {
+          setShowScanner(false);
         };
 
         const branch = activeShift?.branch || user?.branch;
@@ -838,6 +910,14 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                     )}
                   </View>
                 </ScrollView>
+
+      {/* Selfie Geo-Attendance Scanner Modal (Plug & Play Isolation) */}
+      <AttendanceSelfieScanner
+        visible={showScanner}
+        onAttendanceSuccess={handleAttendanceSuccess}
+        onAttendanceFailure={handleAttendanceFailure}
+        onCancel={handleAttendanceCancel}
+      />
     </SafeAreaView>
         );
       };
